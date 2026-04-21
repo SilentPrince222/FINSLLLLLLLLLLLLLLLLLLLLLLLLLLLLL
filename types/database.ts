@@ -90,12 +90,58 @@ export interface Database {
                     created_at?: string
                 }
             }
+            events: {
+                Row: {
+                    id: number
+                    user_id: string
+                    title: string
+                    due_date: string
+                    description: string | null
+                    type: string
+                    priority: string
+                    created_at: string
+                }
+                Insert: {
+                    id?: number
+                    user_id: string
+                    title: string
+                    due_date: string
+                    description?: string | null
+                    type: string
+                    priority?: string
+                    created_at?: string
+                }
+                Update: {
+                    id?: number
+                    user_id?: string
+                    title?: string
+                    due_date?: string
+                    description?: string | null
+                    type?: string
+                    priority?: string
+                    created_at?: string
+                }
+            }
         }
         Views: {
             [_ in never]: never
         }
         Functions: {
-            [_ in never]: never
+            get_user_events: {
+                Args: {
+                    user_id: string
+                }
+                Returns: {
+                    id: number
+                    user_id: string
+                    title: string
+                    due_date: string
+                    description: string | null
+                    type: string
+                    priority: string
+                    created_at: string
+                }[]
+            }
         }
         Enums: {
             user_role: 'admin' | 'teacher' | 'student'

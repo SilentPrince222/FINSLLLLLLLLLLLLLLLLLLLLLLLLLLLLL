@@ -77,3 +77,37 @@ export async function deleteTimetableEntry(id: number) {
         .delete()
         .eq('id', id)
 }
+
+// ==================== EVENTS ====================
+export async function getEvents(userId: string) {
+    return supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', userId)
+        .order('due_date', { ascending: true })
+}
+
+export async function createEvent(data: any) {
+    return supabase
+        .from('events')
+        .insert(data)
+        .select()
+        .single()
+}
+
+export async function updateEvent(id: number, data: any) {
+    return supabase
+        .from('events')
+        // @ts-ignore - Supabase typing issue with update method
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single()
+}
+
+export async function deleteEvent(id: number) {
+    return supabase
+        .from('events')
+        .delete()
+        .eq('id', id)
+}

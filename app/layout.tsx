@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { SupabaseProvider } from "@/lib/supabase";
+import { AuthProvider } from "@/lib/auth";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+    subsets: ["latin", "cyrillic"],
+    variable: "--font-inter",
+    display: "swap",
+});
 
 export const metadata: Metadata = {
-    title: "Система управления оценками",
-    description: "Минималистичный сервис для отслеживания успеваемости",
+    title: "College Portal",
+    description: "Система управления образовательным процессом",
+    viewport: "width=device-width, initial-scale=1",
 };
 
 export default function RootLayout({
@@ -15,11 +22,13 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="ru">
-            <body className={inter.className}>
-                <main className="min-h-screen bg-background">
-                    {children}
-                </main>
+        <html lang="ru" suppressHydrationWarning>
+            <body className={`${inter.variable} font-sans antialiased text-slate-900 bg-slate-50 min-h-screen`}>
+                <SupabaseProvider>
+                    <AuthProvider>
+                        {children}
+                    </AuthProvider>
+                </SupabaseProvider>
             </body>
         </html>
     );

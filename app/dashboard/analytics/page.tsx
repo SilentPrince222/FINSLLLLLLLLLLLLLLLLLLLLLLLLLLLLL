@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { BarChart, LineChart, DonutChart } from '@/components/charts'
 
 type GradeData = { subject: string; score: number; date: string }
 type AttendanceData = { month: string; percent: number }
@@ -37,79 +38,6 @@ const mockAttendance: AttendanceData[] = [
 
 const subjects = ['Математика', 'Физика', 'Программирование', 'Английский']
 const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн']
-
-function BarChart({ data, max = 100 }: { data: { label: string; value: number }[], max?: number }) {
-    return (
-        <div className="flex items-end gap-1 h-40">
-            {data.map((d, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center">
-                    <div className="w-full bg-blue-500 rounded-t" style={{ height: `${(d.value / max) * 100}%` }} />
-                    <div className="text-xs mt-1 text-gray-500">{d.label}</div>
-                </div>
-            ))}
-        </div>
-    )
-}
-
-function LineChart({ data }: { data: { label: string; value: number }[] }) {
-    const max = Math.max(...data.map(d => d.value))
-    const points = data.map((d, i) => ({
-        x: (i / (data.length - 1)) * 100,
-        y: 100 - (d.value / max) * 100
-    }))
-    const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-
-    return (
-        <div className="h-40 relative">
-            <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
-                <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                    </linearGradient>
-                </defs>
-                <path d={path + ' L 100 100 L 0 100 Z'} fill="url(#gradient)" />
-                <path d={path} fill="none" stroke="#3b82f6" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                {points.map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r="3" fill="#3b82f6" />
-                ))}
-            </svg>
-            <div className="flex justify-between mt-2">
-                {data.map((d, i) => (
-                    <div key={i} className="text-xs text-gray-500">{d.label}</div>
-                ))}
-            </div>
-        </div>
-    )
-}
-
-function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
-    const total = data.reduce((sum, d) => sum + d.value, 0)
-    let cumulative = 0
-
-    return (
-        <div className="relative h-32 w-32 mx-auto">
-            <svg viewBox="0 0 36 36" className="transform -rotate-90">
-                {data.map((d, i) => {
-                    const offset = cumulative
-                    cumulative += (d.value / total) * 100
-                    return (
-                        <circle
-                            key={i}
-                            cx="18"
-                            cy="18"
-                            r="15.91549430918954"
-                            fill="transparent"
-                            stroke={d.color}
-                            strokeDasharray={`${(d.value / total) * 100} ${100 - (d.value / total) * 100}`}
-                            strokeDashoffset={-offset}
-                        />
-                    )
-                })}
-            </svg>
-        </div>
-    )
-}
 
 export default function AnalyticsPage() {
     const [period, setPeriod] = useState('4')

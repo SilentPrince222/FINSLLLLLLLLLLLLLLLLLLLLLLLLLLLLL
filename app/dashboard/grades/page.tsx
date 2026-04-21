@@ -3,14 +3,29 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getGrades, createGrade, deleteGrade } from '@/lib/database'
+import { GradesCalendar } from '@/components/ui'
 import type { Database } from '@/types/database'
 
 type Grade = Database['public']['Tables']['grades']['Row']
+
+type Lesson = {
+    id: number
+    subject: string
+    time: string
+    grade: number
+    date: string
+}
 
 export default function GradesPage() {
     const { user } = useAuth()
     const [grades, setGrades] = useState<Grade[]>([])
     const [loading, setLoading] = useState(true)
+    const [lessons, setLessons] = useState<Lesson[]>([
+        { id: 1, subject: 'Mathematics', time: '09:00', grade: 85, date: '2026-04-15' },
+        { id: 2, subject: 'Physics', time: '11:00', grade: 78, date: '2026-04-16' },
+        { id: 3, subject: 'Computer Science', time: '14:00', grade: 92, date: '2026-04-17' },
+        { id: 4, subject: 'English', time: '10:00', grade: 88, date: '2026-04-18' },
+    ])
 
     const [subject, setSubject] = useState('')
     const [score, setScore] = useState('')
@@ -56,28 +71,58 @@ export default function GradesPage() {
         setGrades(grades.filter(g => g.id !== id))
     }
 
+    function handleAddLesson(lessonData: Omit<Lesson, 'id'>) {
+        const newLesson: Lesson = {
+            ...lessonData,
+            id: Date.now()
+        }
+        setLessons([...lessons, newLesson])
+
+        // Also add to grades for compatibility
+        if (user) {
+            createGrade({
+                student_id: user.id,
+                subject: lessonData.subject,
+                score: lessonData.grade,
+                semester: 'Current Semester'
+            }).then(({ data }) => {
+                if (data) {
+                    setGrades([data, ...grades])
+                }
+            })
+        }
+    }
+
+    // Calculate GPA from lessons
+    const calculateGPA = () => {
+        if (lessons.length === 0) return 0
+        const totalPoints = lessons.reduce((sum, lesson) => sum + lesson.grade, 0)
+        return Math.round(totalPoints / lessons.length)
+    }
+
+    const gpa = calculateGPA()
     const averageScore = grades.length > 0
         ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length)
         : 0
 
     return (
         <div className="min-h-screen bg-background">
-            <div className="max-w-4xl mx-auto px-8 py-12">
+            <div className="max-w-6xl mx-auto px-8 py-12">
                 <div className="mb-12">
-                    <h1 className="text-2xl font-semibold text-foreground">Grades</h1>
-                    <p className="text-muted-foreground mt-2">Manage your academic performance</p>
+                    <h1 className="text-2xl font-semibold text-foreground">Grades & Schedule</h1>
+                    <p className="text-muted-foreground mt-2">Manage your academic performance and schedule</p>
                 </div>
 
                 {/* Statistics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
                     <div className="card p-8">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
                                 <span className="text-accent">📚</span>
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Total Subjects</p>
-                                <p className="text-3xl font-semibold text-foreground mt-1">{grades.length}</p>
+                                <p className="text-sm text-muted-foreground">Total Lessons</p>
+                                <p className="text-3xl font-semibold text-foreground mt-1">{lessons.length}</p>
                             </div>
                         </div>
                     </div>
@@ -87,6 +132,19 @@ export default function GradesPage() {
                                 <span className="text-accent">📊</span>
                             </div>
                             <div>
+                                <p className="text-sm text-muted-foreground">Current GPA</p>
+                                <p className={`text-3xl font-semibold mt-1 ${gpa >= 70 ? 'text-success' : gpa >= 50 ? 'text-amber-500' : 'text-danger'}`}>
+                                    {gpa}%
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="card p-8">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                                <span className="text-accent">🎯</span>
+                            </div>
+                            <div>
                                 <p className="text-sm text-muted-foreground">Average Score</p>
                                 <p className={`text-3xl font-semibold mt-1 ${averageScore >= 70 ? 'text-success' : averageScore >= 50 ? 'text-amber-500' : 'text-danger'}`}>
                                     {averageScore}%
@@ -94,6 +152,11 @@ export default function GradesPage() {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Interactive Calendar */}
+                <div className="mb-12">
+                    <GradesCalendar onAddLesson={handleAddLesson} lessons={lessons} />
                 </div>
 
                 {/* Add Grade Form */}
