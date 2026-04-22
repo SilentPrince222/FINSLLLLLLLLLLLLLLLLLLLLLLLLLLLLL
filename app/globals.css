@@ -13,6 +13,16 @@
     --card: #ffffff;
   }
 
+  .dark {
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --muted: #64748b;
+    --muted-foreground: #94a3b8;
+    --accent: #3b82f6;
+    --border: #334155;
+    --card: #1e293b;
+  }
+
   html {
     font-family: var(--font-inter), system-ui, sans-serif;
   }

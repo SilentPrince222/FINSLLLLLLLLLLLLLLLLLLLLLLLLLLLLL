@@ -1,0 +1,63 @@
+{
+  "navigation": {
+    "home": "Басты бет",
+    "grades": "Бағалар",
+    "timetable": "Сабақ кестесі",
+    "events": "Іс-шаралар",
+    "materials": "Материалдар",
+    "analytics": "Аналитика",
+    "profile": "Профиль",
+    "dashboard": "Басты бет",
+    "signOut": "Шығу"
+  },
+  "dashboard": {
+    "nextClass": "Келесі сабақ",
+    "noUpcomingClasses": "Алдағы сабақтар жоқ",
+    "allClassesDone": "Барлық сабақтар аяқталды!",
+    "gradesSummary": "Бағалардың қорытындысы",
+    "currentGPA": "Ағымдағы GPA",
+    "totalGrades": "Барлығы бағалар",
+    "thisWeek": "Осы аптада",
+    "newGrades": "жаңа бағалар",
+    "progress": "Прогресс",
+    "upcomingDeadlines": "Жақын мерзімдер",
+    "within48Hours": "48 сағат ішінде",
+    "noUrgentDeadlines": "Жедел мерзімдер жоқ!",
+    "quickActions": "Жылдам әрекеттер",
+    "importantFunctions": "Маңызды функциялар",
+    "scanQR": "📱 QR сканерлеу",
+    "scanAttendance": "Қатысуға белгі қою",
+    "consultation": "📅 Консультация",
+    "bookConsultation": "Оқытушыға жазылу",
+    "curator": "💬 Тәлімгер",
+    "contactCurator": "Тәлімгермен байланысу",
+    "newsFeed": "Жаңалықтар таспасы"
+  },
+  "common": {
+    "loading": "Жүктелуде...",
+    "pleaseLogin": "Жүйеге кіріңіз",
+    "room": "Бөлме",
+    "timeRemaining": "қалды",
+    "high": "Жоғары",
+    "medium": "Орташа",
+    "low": "Төмен"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Құпия сөз",
+    "login": "Кіру",
+    "register": "Тіркелу",
+    "logout": "Шығу",
+    "welcome": "Қош келдіңіз",
+    "loginToContinue": "Жалғастыру үшін кіріңіз"
+  },
+  "themes": {
+    "light": "Жарық",
+    "dark": "Қараңғы",
+    "system": "Жүйелік"
+  },
+  "languages": {
+    "russian": "Русский",
+    "kazakh": "Қазақша"
+  }
+}

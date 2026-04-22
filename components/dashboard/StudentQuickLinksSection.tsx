@@ -1,12 +1,14 @@
 import React from 'react'
+import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 import Button from '@/components/Button'
 
 export default function StudentQuickLinksSection() {
+  const t = useTranslations('dashboard')
   const actions = [
-    { label: '📱 Сканировать QR', action: 'scan-qr', description: 'Отметить посещаемость' },
-    { label: '📅 Консультация', action: 'consultation', description: 'Записаться к преподавателю' },
-    { label: '💬 Куратор', action: 'curator', description: 'Связаться с куратором' },
+    { label: t('scanQR'), action: 'scan-qr', description: t('scanAttendance') },
+    { label: t('consultation'), action: 'consultation', description: t('bookConsultation') },
+    { label: t('curator'), action: 'curator', description: t('contactCurator') },
   ]
 
   const handleAction = (action: string) => {
@@ -36,8 +38,8 @@ export default function StudentQuickLinksSection() {
             <span className="text-2xl">🔗</span>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-foreground">Быстрые действия</h3>
-            <p className="text-sm text-muted-foreground">Важные функции</p>
+            <h3 className="text-xl font-bold text-foreground">{t('quickActions')}</h3>
+            <p className="text-sm text-muted-foreground">{t('importantFunctions')}</p>
           </div>
         </div>
         <div className="space-y-3">

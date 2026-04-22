@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 
 interface Grade {
@@ -13,6 +14,7 @@ interface GradesSummarySectionProps {
 }
 
 export default function GradesSummarySection({ grades }: GradesSummarySectionProps) {
+  const t = useTranslations('dashboard')
   // Calculate GPA (average score)
   const gpa = grades.length > 0
     ? Math.round(grades.reduce((sum, grade) => sum + grade.score, 0) / grades.length)
@@ -37,7 +39,7 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
             <span className="text-2xl">📊</span>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-foreground">Сводка успеваемости</h3>
+            <h3 className="text-xl font-bold text-foreground">{t('gradesSummary')}</h3>
             <p className="text-sm text-muted-foreground">Ваш академический обзор</p>
           </div>
         </div>
@@ -46,11 +48,11 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
           <div className="p-4 rounded-xl bg-gradient-to-r from-accent/10 to-blue-500/10">
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">Текущий GPA</p>
+                <p className="text-sm text-muted-foreground">{t('currentGPA')}</p>
                 <p className={`text-3xl font-bold ${getGpaColor(gpa)}`}>{gpa}%</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">Всего оценок</p>
+                <p className="text-sm text-muted-foreground">{t('totalGrades')}</p>
                 <p className="text-lg font-semibold">{grades.length}</p>
               </div>
             </div>
@@ -60,11 +62,11 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
           <div className="p-4 rounded-xl bg-muted/50">
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">На этой неделе</p>
-                <p className="text-lg font-semibold">{weeklyGrades.length} новых оценок</p>
+                <p className="text-sm text-muted-foreground">{t('thisWeek')}</p>
+                <p className="text-lg font-semibold">{weeklyGrades.length} {t('newGrades')}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">Прогресс</p>
+                <p className="text-sm text-muted-foreground">{t('progress')}</p>
                 <p className="text-lg font-semibold text-accent">+{weeklyGrades.length}</p>
               </div>
             </div>

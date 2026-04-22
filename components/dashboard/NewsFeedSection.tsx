@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 
 interface NewsItem {
@@ -15,6 +16,7 @@ interface NewsFeedSectionProps {
 }
 
 export default function NewsFeedSection({ news }: NewsFeedSectionProps) {
+  const t = useTranslations('dashboard')
   return (
     <div className="col-span-12 md:col-span-3">
       <Card variant="elevated" hover className="h-full">
@@ -23,7 +25,7 @@ export default function NewsFeedSection({ news }: NewsFeedSectionProps) {
             <span className="text-2xl">📰</span>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-foreground">News Feed</h3>
+            <h3 className="text-xl font-bold text-foreground">{t('newsFeed')}</h3>
             <p className="text-sm text-muted-foreground">Latest college updates</p>
           </div>
         </div>

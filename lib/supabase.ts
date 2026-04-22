@@ -3,10 +3,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/database';
-import type { SupabaseClient } from '@supabase/auth-helpers-nextjs';
 
 type SupabaseContextType = {
-    supabase: SupabaseClient<Database>;
+    supabase: ReturnType<typeof createClientComponentClient<Database>>;
     isLoading: boolean;
 };
 
@@ -18,14 +17,27 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const init = async () => {
-            await supabase.auth.getSession();
-            setIsLoading(false);
+            try {
+                await supabase.auth.getSession();
+            } catch (error) {
+                console.error('Failed to get supabase session:', error);
+            } finally {
+                setIsLoading(false);
+            }
         };
         init();
     }, [supabase]);
 
-    // @ts-ignore - Known type conflict bug in supabase auth helpers version
-    return React.createElement(SupabaseContext.Provider, { value: { supabase, isLoading } }, children);
+    return React.createElement(
+        SupabaseContext.Provider,
+        {
+            value: {
+                supabase,
+                isLoading
+            }
+        },
+        children
+    );
 }
 
 export function useSupabase() {

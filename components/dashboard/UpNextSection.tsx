@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 
 interface TimetableEntry {
@@ -15,6 +16,7 @@ interface UpNextSectionProps {
 }
 
 export default function UpNextSection({ timetable }: UpNextSectionProps) {
+  const t = useTranslations('dashboard')
   // Get current day and time
   const now = new Date()
   // Получаем день недели (например, "monday")
@@ -63,18 +65,18 @@ export default function UpNextSection({ timetable }: UpNextSectionProps) {
     return (
       <div className="col-span-12 md:col-span-3">
         <Card variant="default" hover className="h-full">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
-              <span className="text-2xl">⏰</span>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
+                <span className="text-2xl">⏰</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">{t('nextClass')}</h3>
+                <p className="text-sm text-muted-foreground">{t('noUpcomingClasses')}</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-foreground">Следующая пара</h3>
-              <p className="text-sm text-muted-foreground">Нет предстоящих занятий</p>
+            <div className="text-center py-8 text-muted-foreground">
+              <p>{t('allClassesDone')}</p>
             </div>
-          </div>
-          <div className="text-center py-8 text-muted-foreground">
-            <p>Все занятия окончены!</p>
-          </div>
         </Card>
       </div>
     )
@@ -83,15 +85,15 @@ export default function UpNextSection({ timetable }: UpNextSectionProps) {
   return (
     <div className="col-span-12 md:col-span-3">
       <Card variant="elevated" hover className="h-full">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
-            <span className="text-2xl">⏰</span>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
+              <span className="text-2xl">⏰</span>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-foreground">{t('nextClass')}</h3>
+              <p className="text-sm text-muted-foreground">Ваше следующее занятие</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xl font-bold text-foreground">Следующая пара</h3>
-            <p className="text-sm text-muted-foreground">Ваше следующее занятие</p>
-          </div>
-        </div>
         <div className="space-y-3">
           <div className="p-4 rounded-xl bg-gradient-to-r from-accent/10 to-blue-500/10">
             <div className="flex justify-between items-start">

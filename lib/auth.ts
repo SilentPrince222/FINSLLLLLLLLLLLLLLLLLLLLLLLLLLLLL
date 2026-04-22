@@ -80,6 +80,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         }
 
+        // Development mode: auto-login with mock student user
+        if (process.env.NODE_ENV === 'development') {
+            const devUser = {
+                id: 'student-1',
+                email: 'student@demo.com',
+                user_metadata: { role: 'student', full_name: 'Иван Иванов' },
+                created_at: new Date().toISOString()
+            } as unknown as User
+            localStorage.setItem('mock_user', JSON.stringify(devUser))
+            setUser(devUser)
+            setLoading(false)
+            return
+        }
+
         // Fall back to Supabase auth
         const getUser = async () => {
             try {

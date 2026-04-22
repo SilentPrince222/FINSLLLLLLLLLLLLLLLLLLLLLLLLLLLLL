@@ -1,0 +1,63 @@
+{
+  "navigation": {
+    "home": "Главная",
+    "grades": "Оценки",
+    "timetable": "Расписание",
+    "events": "События",
+    "materials": "Материалы",
+    "analytics": "Аналитика",
+    "profile": "Профиль",
+    "dashboard": "Главная",
+    "signOut": "Выйти"
+  },
+  "dashboard": {
+    "nextClass": "Следующая пара",
+    "noUpcomingClasses": "Нет предстоящих занятий",
+    "allClassesDone": "Все занятия окончены!",
+    "gradesSummary": "Сводка успеваемости",
+    "currentGPA": "Текущий GPA",
+    "totalGrades": "Всего оценок",
+    "thisWeek": "На этой неделе",
+    "newGrades": "новых оценок",
+    "progress": "Прогресс",
+    "upcomingDeadlines": "Ближайшие дедлайны",
+    "within48Hours": "В ближайшие 48 часов",
+    "noUrgentDeadlines": "Нет срочных дедлайнов!",
+    "quickActions": "Быстрые действия",
+    "importantFunctions": "Важные функции",
+    "scanQR": "📱 Сканировать QR",
+    "scanAttendance": "Отметить посещаемость",
+    "consultation": "📅 Консультация",
+    "bookConsultation": "Записаться к преподавателю",
+    "curator": "💬 Куратор",
+    "contactCurator": "Связаться с куратором",
+    "newsFeed": "Лента новостей"
+  },
+  "common": {
+    "loading": "Загрузка...",
+    "pleaseLogin": "Пожалуйста, войдите в систему",
+    "room": "Кабинет",
+    "timeRemaining": "осталось",
+    "high": "Высокий",
+    "medium": "Средний",
+    "low": "Низкий"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Пароль",
+    "login": "Войти",
+    "register": "Регистрация",
+    "logout": "Выйти",
+    "welcome": "Добро пожаловать",
+    "loginToContinue": "Войдите, чтобы продолжить"
+  },
+  "themes": {
+    "light": "Светлая",
+    "dark": "Темная",
+    "system": "Системная"
+  },
+  "languages": {
+    "russian": "Русский",
+    "kazakh": "Қазақша"
+  }
+}

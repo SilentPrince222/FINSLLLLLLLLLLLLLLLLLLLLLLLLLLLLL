@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth, signOut } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import Navigation from '@/components/ui/Navigation'
 import { useGrades, useTimetable, useEvents } from '@/hooks'
 import {
@@ -76,12 +77,13 @@ export default function Dashboard() {
 
     const role = user.user_metadata?.role || 'student'
 
+    const locale = 'ru'
     const navItems = [
-        { label: 'Dashboard', href: '/dashboard', icon: '📊', onClick: () => router.push('/dashboard') },
-        { label: 'Grades', href: '/dashboard/grades', icon: '📚', onClick: () => router.push('/dashboard/grades') },
-        { label: 'Timetable', href: '/dashboard/timetable', icon: '📅', onClick: () => router.push('/dashboard/timetable') },
-        { label: 'Events', href: '/dashboard/events', icon: '📅', onClick: () => router.push('/dashboard/events') },
-        { label: 'Sign Out', href: '/', icon: '🚪', onClick: () => signOut().then(() => router.push('/')) },
+        { label: 'Dashboard', href: `/${locale}/dashboard`, icon: '📊', onClick: () => router.push(`/${locale}/dashboard`) },
+        { label: 'Grades', href: `/${locale}/dashboard/grades`, icon: '📚', onClick: () => router.push(`/${locale}/dashboard/grades`) },
+        { label: 'Timetable', href: `/${locale}/dashboard/timetable`, icon: '📅', onClick: () => router.push(`/${locale}/dashboard/timetable`) },
+        { label: 'Events', href: `/${locale}/dashboard/events`, icon: '📅', onClick: () => router.push(`/${locale}/dashboard/events`) },
+        { label: 'Sign Out', href: `/${locale}`, icon: '🚪', onClick: () => signOut().then(() => router.push(`/${locale}`)) },
     ]
 
     return (

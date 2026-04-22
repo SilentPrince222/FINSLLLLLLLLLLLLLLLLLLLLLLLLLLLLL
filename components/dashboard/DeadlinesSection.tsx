@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 
 interface Event {
@@ -15,6 +16,7 @@ interface DeadlinesSectionProps {
 }
 
 export default function DeadlinesSection({ events = [] }: DeadlinesSectionProps) {
+  const t = useTranslations('dashboard')
   // Filter events that are deadlines (exams, homework)
   const deadlineTypes = ['exam', 'homework']
   const deadlines = events.filter(event => deadlineTypes.includes(event.type))
@@ -59,14 +61,14 @@ export default function DeadlinesSection({ events = [] }: DeadlinesSectionProps)
             <span className="text-2xl">⏰</span>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-foreground">Ближайшие дедлайны</h3>
-            <p className="text-sm text-muted-foreground">В ближайшие 48 часов</p>
+            <h3 className="text-xl font-bold text-foreground">{t('upcomingDeadlines')}</h3>
+            <p className="text-sm text-muted-foreground">{t('within48Hours')}</p>
           </div>
         </div>
         <div className="space-y-3">
           {upcomingDeadlines.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>Нет срочных дедлайнов!</p>
+              <p>{t('noUrgentDeadlines')}</p>
             </div>
           ) : (
             upcomingDeadlines.map(deadline => (
