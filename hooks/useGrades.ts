@@ -1,29 +1,30 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getGrades } from '@/lib/database'
+import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
+import type { Database } from '@/types/database'
 
-interface Grade {
-  id: number
-  student_id: string
-  subject: string
-  score: number
-  semester: string
-  created_at?: string
-}
+type Grade = Database['public']['Tables']['grades']['Row']
+
+const PULSE_DURATION_MS = 6000
+const POLL_GRACE_MS = 10_000
+const POLL_INTERVAL_MS = 3_000
 
 export function useGrades() {
   const { user } = useAuth()
-  // Bug 7.5: track user.id, not the user object reference, to avoid re-fetching
-  // when the same user is re-created as a new object
+  // Track user.id (primitive) — not user (object) — to avoid spurious re-fetches
   const userId = user?.id ?? null
 
   const [grades, setGrades] = useState<Grade[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // §7.4 pulse: transient Set of grade ids that just arrived over Realtime
+  const [recentIds, setRecentIds] = useState<Set<number>>(new Set())
 
-  // Bug 7.1 / 2.3: use a ref-based abort flag so an in-flight fetch never
-  // updates state after unmount or after the user has changed/cleared
   const mountedRef = useRef(true)
+  // Monotonic load id — older fetches can tell they've been superseded
+  const activeLoadId = useRef(0)
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -32,46 +33,30 @@ export function useGrades() {
   }, [])
 
   const loadGrades = useCallback(async () => {
-    // Bug 7.6: set loading=false immediately when there is no user
-    if (!user) { setLoading(false); return }
     if (!userId) { setLoading(false); return }
 
-    // Bug 2.3: capture the userId that was current when this call started.
-    // Each invocation gets its own abort controller so mid-flight user=null
-    // won't corrupt state.
-    const abortController = new AbortController()
+    const myLoadId = ++activeLoadId.current
     const currentUserId = userId
 
     setLoading(true)
     setError(null)
     try {
       const { data, error: dbError } = await getGrades(currentUserId)
-
-      // Bug 7.1 / 2.3: bail out if component unmounted or user changed
-      if (!mountedRef.current || abortController.signal.aborted) return
-
+      if (!mountedRef.current || myLoadId !== activeLoadId.current) return
       if (dbError) throw dbError
-
-      // Bug 2.4: do NOT inject mock data — return empty array when DB is empty
-      setGrades(data ?? [])
+      setGrades((data ?? []) as Grade[])
     } catch (err) {
-      if (!mountedRef.current || abortController.signal.aborted) return
+      if (!mountedRef.current || myLoadId !== activeLoadId.current) return
       setError(err instanceof Error ? err.message : 'Failed to load grades')
     } finally {
-      if (mountedRef.current && !abortController.signal.aborted) {
+      if (mountedRef.current && myLoadId === activeLoadId.current) {
         setLoading(false)
       }
     }
-
-    return () => abortController.abort()
-  // Bug 7.5: depend on userId (primitive) not user (object) to avoid
-  // spurious re-fetches when the same user is re-created as a new object
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   useEffect(() => {
-    if (user?.id) {
-      // Bug 7.4: clear error immediately in the useEffect body when user changes
+    if (userId) {
       setError(null)
       loadGrades()
     } else {
@@ -79,14 +64,89 @@ export function useGrades() {
       setError(null)
       setLoading(false)
     }
-  // Bug 7.5: depend on user?.id (primitive string) not user (object reference)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, loadGrades])
+  }, [userId, loadGrades])
+
+  // §7.2/7.3 — Realtime subscription + polling fallback.
+  useEffect(() => {
+    if (!userId) return
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null
+    let graceTimer: ReturnType<typeof setTimeout> | null = null
+    let isClosed = false
+
+    const startPolling = () => {
+      if (pollInterval || !isClosed || !mountedRef.current) return
+      pollInterval = setInterval(() => { loadGrades() }, POLL_INTERVAL_MS)
+    }
+
+    const handleInsert = (payload: { new: Grade }) => {
+      if (!mountedRef.current) return
+      const newGrade = payload.new
+      // Dedup by id — a polling refetch could have pre-populated it
+      setGrades(prev =>
+        prev.some(g => g.id === newGrade.id) ? prev : [newGrade, ...prev]
+      )
+      setRecentIds(prev => {
+        const next = new Set(prev)
+        next.add(newGrade.id)
+        return next
+      })
+      setTimeout(() => {
+        if (!mountedRef.current) return
+        setRecentIds(prev => {
+          if (!prev.has(newGrade.id)) return prev
+          const next = new Set(prev)
+          next.delete(newGrade.id)
+          return next
+        })
+      }, PULSE_DURATION_MS)
+      toast.success(`Жаңа баға: ${newGrade.subject} — ${newGrade.score}`)
+    }
+
+    const channel = supabase
+      .channel(`grades:${userId}`)
+      .on(
+        'postgres_changes' as any,
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'grades',
+          filter: `student_id=eq.${userId}`,
+        },
+        handleInsert as any
+      )
+      .subscribe(status => {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Status callback fires once per transition — schedule the poll start
+          // after the grace window rather than waiting for another callback.
+          isClosed = true
+          if (!graceTimer && !pollInterval) {
+            graceTimer = setTimeout(() => {
+              graceTimer = null
+              startPolling()
+            }, POLL_GRACE_MS)
+          }
+        } else if (status === 'SUBSCRIBED') {
+          isClosed = false
+          if (graceTimer) { clearTimeout(graceTimer); graceTimer = null }
+          if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
+          // Close the gap between last poll tick and first Realtime delivery
+          loadGrades()
+        }
+      })
+
+    return () => {
+      if (graceTimer) clearTimeout(graceTimer)
+      if (pollInterval) clearInterval(pollInterval)
+      supabase.removeChannel(channel)
+    }
+  }, [userId, loadGrades])
 
   return {
     grades,
     loading,
     error,
+    recentIds,
     refetch: loadGrades
   }
 }

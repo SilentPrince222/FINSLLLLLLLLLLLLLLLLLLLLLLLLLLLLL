@@ -1,4 +1,7 @@
+'use client'
+
 import React from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 
@@ -11,9 +14,10 @@ interface Grade {
 
 interface GradesSummarySectionProps {
   grades: Grade[] | null
+  recentIds?: Set<number>
 }
 
-export default function GradesSummarySection({ grades }: GradesSummarySectionProps) {
+export default function GradesSummarySection({ grades, recentIds }: GradesSummarySectionProps) {
   const t = useTranslations('dashboard')
   const safeGrades = grades ?? []
   const gpa = safeGrades.length > 0
@@ -24,6 +28,8 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weeklyGrades = safeGrades.filter(grade => grade.created_at && new Date(grade.created_at) > weekAgo)
 
+  const hasRecent = (recentIds?.size ?? 0) > 0
+
   const getGpaColor = (score: number) => {
     if (score >= 90) return 'text-success'
     if (score >= 70) return 'text-warning'
@@ -32,7 +38,7 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
 
   return (
     <div className="col-span-12 md:col-span-3">
-      <Card variant="glass" hover className="h-full">
+      <Card variant="glass" hover className={`h-full ${hasRecent ? 'animate-grade-pulse' : ''}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
             <span className="text-2xl">📊</span>
@@ -48,7 +54,18 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-muted-foreground">{t('currentGPA')}</p>
-                <p className={`text-3xl font-bold ${getGpaColor(gpa)}`}>{gpa}%</p>
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={gpa}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.4 }}
+                    className={`text-3xl font-bold ${getGpaColor(gpa)}`}
+                  >
+                    {gpa}%
+                  </motion.p>
+                </AnimatePresence>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">{t('totalGrades')}</p>

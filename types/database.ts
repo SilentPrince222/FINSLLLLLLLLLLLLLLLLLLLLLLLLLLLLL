@@ -13,22 +13,28 @@ export interface Database {
                 Row: {
                     id: string
                     email: string
-                    role: 'admin' | 'teacher' | 'student'
+                    role: 'admin' | 'teacher' | 'student' | 'parent'
                     full_name: string | null
+                    group_name: string | null
+                    attendance_rate: number | null
                     created_at: string
                 }
                 Insert: {
                     id: string
                     email: string
-                    role?: 'admin' | 'teacher' | 'student'
+                    role?: 'admin' | 'teacher' | 'student' | 'parent'
                     full_name?: string | null
+                    group_name?: string | null
+                    attendance_rate?: number | null
                     created_at?: string
                 }
                 Update: {
                     id?: string
                     email?: string
-                    role?: 'admin' | 'teacher' | 'student'
+                    role?: 'admin' | 'teacher' | 'student' | 'parent'
                     full_name?: string | null
+                    group_name?: string | null
+                    attendance_rate?: number | null
                     created_at?: string
                 }
             }
@@ -36,25 +42,31 @@ export interface Database {
                 Row: {
                     id: number
                     student_id: string
+                    teacher_id: string | null
                     subject: string
                     score: number
                     semester: string
+                    comment: string | null
                     created_at: string
                 }
                 Insert: {
                     id?: number
                     student_id: string
+                    teacher_id?: string | null
                     subject: string
                     score: number
                     semester: string
+                    comment?: string | null
                     created_at?: string
                 }
                 Update: {
                     id?: number
                     student_id?: string
+                    teacher_id?: string | null
                     subject?: string
                     score?: number
                     semester?: string
+                    comment?: string | null
                     created_at?: string
                 }
             }
@@ -144,7 +156,7 @@ export interface Database {
             }
         }
         Enums: {
-            user_role: 'admin' | 'teacher' | 'student'
+            user_role: 'admin' | 'teacher' | 'student' | 'parent'
         }
     }
 }

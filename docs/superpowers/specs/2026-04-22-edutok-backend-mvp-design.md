@@ -1,8 +1,8 @@
 # EduTok Backend MVP — Design Spec
 
 **Date:** 2026-04-22
-**Status:** Reviewed 2026-04-22 — 9 review fixes (§16.2) + bugfix integration (§16.3); timeline open (§9.2); **VERIFIED** markers in §5.1, §6.1, §6.2
-**Timeline:** 10h 30m tracked (down from 11h 25m after 2026-04-22 bugfix saved 55m) — extension-vs-scope-cut decision open (§9.2)
+**Status:** Reviewed 2026-04-22 — 9 review fixes (§16.2) + bugfix integration (§16.3); **VERIFIED** markers in §5.1, §6.1, §6.2
+**Timeline:** 10h 30m tracked (down from 11h 25m after 2026-04-22 bugfix saved 55m)
 **Scope:** Backend-only (UI design out of scope; minimal UI wiring to consume real data)
 
 ---
@@ -456,11 +456,11 @@ Rejected alternative: the `simple-statistics` npm package (≈30KB, transitive d
 
 ### 8.4 Dependencies
 
-Add `tsx` to `devDependencies` for running TypeScript scripts directly.
+Add `tsx` to `devDependencies` for running TypeScript scripts directly. Note: `vitest` + `@testing-library/*` are already present from the 2026-04-22 bugfix session — don't re-add them. 184 tests currently pass; `npx vitest run` is the command.
 
 ---
 
-## 9. Timeline (revised 10h 30m — see §9.2 for open question)
+## 9. Timeline (revised 10h 30m)
 
 | # | Step | Duration | Risk | Output |
 |---|---|---:|---|---|
@@ -493,17 +493,18 @@ Tracks the work added by the §16 review fixes — consolidated here so a reader
 | #13 `SEMESTER` constant + DB CHECK constraint | +10m | 1, 2 |
 | **Subtotal folded into timeline** | **+85m** | — |
 
-### 9.2 Timeline realism — open for user decision
+### 9.1a Bugfix savings (2026-04-22)
 
-Review agents projected **~18h realistic** execution for this spec, vs the 10h budget it was authored against. The 85m of §9.1 fixes consume the original buffer and push the tracked total to **11h 25m** — still below 18h, because the agents' estimates included general pessimism (unfamiliar SDK, debugging Realtime, etc.) that the VERIFIED-marked sections and concrete-code-in-spec approach partially defuse.
+Two parallel Sonnet-4.6 audit agents (2026-04-22, post-bugfix) found parts of the spec that the bugfix had already completed. Work handed back:
 
-The remaining gap (11h 25m tracked → ~14–16h pragmatic) is **not resolved here**. Options:
+| Bugfix work already done | Minutes saved | Step |
+|---|---:|---|
+| Route hardening (Content-Type / Content-Length / rate-limit / validation guards) | −20m | 6 |
+| `hooks/useGrades.ts` rewrite (`mountedRef`, `AbortController`, `userId` primitive dep, `refetch` export, `getGrades` delegation) | −40m | 7 |
+| Types ordering clarity penalty (`types/database.ts` explicit column additions as step 1's first action) | +5m | 1 |
+| **Net savings** | **−55m** | — |
 
-- **A — Extend to 2 calendar days.** Commit to two 8h blocks. Cleanest; costs a calendar day.
-- **B — Drop Gemini (§6).** Saves ~90m + removes one integration risk class. Keeps Realtime + teacher persistence — the two load-bearing demo moments. Loses one "wow" factor.
-- **C — Cut seed from 30 students to 10.** Saves ~30m on step 3. Accept a late night. Thinnest cut; demo still looks populated.
-
-User must pick before step 1 begins. Until then, step estimates are accurate but the **total is not load-bearing**.
+Post-bugfix total: 685 − 55 = **630 min = 10h 30m**.
 
 ---
 
@@ -548,7 +549,7 @@ Explicitly excluded to prevent scope creep:
 - Full middleware-based route protection (client-side `useRequireAuth` only).
 - Streaming Gemini responses.
 - New UI / glassmorphism / neon design (per user's explicit request).
-- Test coverage for new code (Playwright exists but no time to expand).
+- Unit-test expansion for the new backend MVP code (the 2026-04-22 bugfix session already added 184 vitest tests covering hooks, API route, and components — new tests for the Realtime subscription, Gemini route rewrite, and teacher page are still out of scope for the demo build).
 - Production deploy to Vercel.
 - Password rotation / proper user account management.
 
@@ -559,7 +560,7 @@ Explicitly excluded to prevent scope creep:
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Supabase Realtime doesn't fire | medium | high | `replica identity full` set up front; polling fallback at 10s timeout |
-| Gemini API rate limit or outage during demo | low | medium | Rate-limit user to 5/min (prevents us triggering Google limits); show error message instead of fake response |
+| Gemini API rate limit or outage during demo | low | medium | Rate-limit already implemented (atomic 5/min, bugfix 3.2 — 2026-04-22); add 503 error response on Gemini failure (still to-do in §6.1 rewrite) |
 | `auth.admin.createUser` rate-limited during seed | medium | low | Delay 500ms between creates; seed completes in <30s even at worst |
 | RLS misconfigured, Realtime payload empty | low | high | Verify with manual test after step 2; has its own test in step 3's end-of-seed output |
 | Service role key accidentally bundled client-side | low | critical | Keep it exclusively in `scripts/` and `.env.local`; lint check in buffer time |
@@ -615,14 +616,29 @@ Reopening any row requires a 2026+ source (deprecation notice, changelog entry, 
 | 7 | Explicit RLS `with check (auth.uid() = teacher_id …)` on grade INSERT | §4.1a | Previously any teacher could attribute grades to a colleague |
 | 8 | `waitForProfile` bounded poll before seed UPDATE | §8.1 step 4 | Guards against `handle_new_user` trigger lag — without it UPDATE silently touches 0 rows on latency spikes |
 | 9 | Multi-page `listUsers` loop on wipe | §8.1 step 1 | Single page misses users >1000, causing duplicate-email failures on re-seed |
-| 10 | `refetchGrades` defined in `useGrades` + exported from hook return | §7.1 | Previously referenced but never defined; polling fallback would throw `ReferenceError` |
+| 10 | Polling fallback needs a retrievable refetch symbol from `useGrades` | §7.1 | Previously referenced as `refetchGrades` but undefined. **Resolved by 2026-04-22 bugfix** — `useGrades` already returns `{ grades, loading, error, refetch }`; spec updated to use `refetch` throughout (§16.3) |
 | 11 | Dedup by `id` in Realtime handler + ordered `SUBSCRIBED` cleanup (clearInterval → gap-close refetch → resume) | §7.1, §7.5 | Prevents double-append when polling and Realtime overlap; closes the gap window between last poll and first Realtime delivery |
 | 12 | `NOT NULL` on `grades.teacher_id` + partial CHECK `role <> 'student' or group_name is not null` — applied after seed backfill | §4.1, §8.1 step 6 | Previously both columns could silently be NULL in application inserts |
 | 13 | `SEMESTER` constant in `lib/constants.ts` + DB CHECK `semester = '2026-1'` | §4.1, §4.1b | Replaces string-literal `'2026-1'` scattered across seed + teacher page; pins the demo semester at the DB layer |
 
-### 16.3 Timeline concern — open (see §9.2)
+### 16.3 Bugfix integration (2026-04-22, post-review)
 
-Reviewer estimated real execution at ~18h vs spec's 10h. The 9 accepted fixes add **+85 min tracked** (pushing the total to 11h 25m); the residual gap to 18h is debatable but real. §9.2 enumerates three resolution options (extend to 2 days, drop Gemini, cut seed size) and flags the decision as blocking on user input before step 1 begins.
+A separate bugfix session (logged in `docs/token-usage.md`) applied Tiers 1–3 of 107 bugs from `bugs.md` — `strictNullChecks` + ES2020 in `tsconfig`, atomic rate-limit + Content-Type / size guards in the AI route, `singleOrNull` wrapper in `lib/database.ts`, `mountedRef` / `AbortController` / `userId` primitive dep in `hooks/useGrades.ts`, 184 vitest tests added. Two parallel Sonnet-4.6 audit agents (2026-04-22, post-bugfix) identified the intersections below; all are folded in.
+
+| Finding | Section(s) updated | Change summary |
+|---|---|---|
+| `useGrades.ts` returns `refetch` (not `refetchGrades`) | §7.1, §7.5, §9 step 7, §16.2 row 10 | Rename throughout |
+| `useGrades.ts` uses `userId` primitive dep (not `user` object) | §7.1 | Adjust dependency array + null-check on `userId` |
+| `useGrades.ts` delegates to `getGrades()` in `lib/database.ts` | §7.1 | Replace inline `supabase.from(...)` with `getGrades(userId)` |
+| Route already has atomic rate-limit / Content-Type / size guards | §6.1, §13 risk row 2 | Preserve verbatim; Gemini rewrite replaces analysis block only |
+| `response.text` typed `string \| undefined` under strictNullChecks | §6.1 | Null-guard before `JSON.parse` |
+| `.single()` on profile role throws PGRST116 | §5.1 | Use `getProfile(user.id)` (bugfix-wrapped `singleOrNull`) |
+| `AuthContextType` lacks `role` field | §5.1 | Extend type + `useState<string \| null>` in provider |
+| `types/database.ts` missing new columns | §4.4 | Specify `Row`/`Insert`/`Update` additions; flag as first edit in step 1 |
+| Test-coverage "out of scope" claim stale | §12 | Reword to reflect 184 passing tests |
+| `lib/constants.ts` doesn't exist yet | §4.1b | Flag create-before-import ordering |
+| Timeline savings from bugfix | §9 table, §9.1a (new) | Total 11h 25m → 10h 30m (−55m) |
+| `CLAUDE.md` missing vitest / seed commands | CLAUDE.md (not spec) | Added outside spec |
 
 ---
 

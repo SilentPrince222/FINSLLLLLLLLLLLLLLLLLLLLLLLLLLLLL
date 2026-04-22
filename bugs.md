@@ -87,3 +87,27 @@
 3. **Add error handling** to grade/timetable CRUD operations — silent data loss
 4. **Revoke exposed secrets** in `.env.local` — real API keys committed to repo
 5. **Add empty-data guards** to chart components — crash on empty arrays
+
+---
+
+## Vitest Regression Tests (2026-04-22)
+
+**File:** `tests/unit/red-bugs-md.test.tsx` — 15 tests, **14 RED / 1 GREEN**
+
+| Bug # | Test | Result | What it proves |
+|-------|------|--------|----------------|
+| CRITICAL #4 | LineChart empty array → empty SVG, no fallback | GREEN | Bug is only real at `data.length = 1`, not `0` |
+| CRITICAL #4 | LineChart single point → NaN in SVG path | RED | Confirmed: `i / (1-1)` = NaN |
+| CRITICAL #5 | DonutChart empty array → 0 circles rendered | RED | Confirmed: invisible SVG, no empty state |
+| CRITICAL #5 | DonutChart all zeros → NaN in strokeDasharray | RED | Confirmed: `value / 0` = NaN |
+| HIGH #4 | `const locale = 'ru'` hardcoded in dashboard | RED | Confirmed: should read from params |
+| HIGH #6 | Playwright baseURL = localhost:3001 | RED | Confirmed: dev server is 3000 |
+| HIGH #6 | Playwright webServer url = localhost:3001 | RED | Confirmed: both ports wrong |
+| HIGH #7 | QuickLinksSection href never passed to Button | RED | Confirmed: `link.href` not used in JSX |
+| HIGH #8 | Students mock has "John", "Emma", etc. | RED | Confirmed: Western names present |
+| HIGH #8 | Students mock uses @college.edu | RED | Confirmed: wrong email domain |
+| HIGH #10 | kk.json `languages.russian` = "Русский" | RED | Confirmed: should be "Орысша" |
+| HIGH #10 | kk.json should not equal "Русский" | RED | Confirmed: duplicate assertion |
+| MEDIUM #8/9 | Analytics `months[i].toLowerCase()` filter | RED | Confirmed: "янв" never matches "2026-01" |
+| MEDIUM #8/9 | Analytics lacks Date/numeric month parsing | RED | Confirmed: no proper date handling |
+| MEDIUM #12 | `return () => {}` dead cleanup in dashboard | RED | Confirmed: empty cleanup present |

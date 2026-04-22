@@ -44,17 +44,25 @@ export default function Card({
   hover = false,
   ...props
 }: CardProps) {
-  const Component = hover ? motion.div : 'div'
+  const cardClass = cn(cardVariants({ variant, padding, className }))
+
+  if (hover) {
+    return (
+      <motion.div
+        className={cardClass}
+        whileHover={{ y: -2, scale: 1.01 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+        {...(props as object)}
+      >
+        {children}
+      </motion.div>
+    )
+  }
 
   return (
-    <Component
-      className={cn(cardVariants({ variant, padding, className }))}
-      whileHover={hover ? { y: -2, scale: 1.01 } : undefined}
-      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-      {...props}
-    >
+    <div className={cardClass} {...props}>
       {children}
-    </Component>
+    </div>
   )
 }
 

@@ -15,13 +15,17 @@ vi.mock('next/navigation', () => {
 })
 
 vi.mock('framer-motion', () => {
-  const MotionDiv = React.forwardRef((props: any, ref: any) =>
-    React.createElement('div', { ...props, ref })
-  )
-  MotionDiv.displayName = 'MotionDiv'
+  const makeEl = (tag: string) => {
+    const C = React.forwardRef((props: any, ref: any) =>
+      React.createElement(tag, { ...props, ref })
+    )
+    C.displayName = `motion.${tag}`
+    return C
+  }
   return {
-    motion: { div: MotionDiv },
+    motion: { div: makeEl('div'), p: makeEl('p'), span: makeEl('span'), h1: makeEl('h1'), h2: makeEl('h2'), ul: makeEl('ul'), li: makeEl('li') },
     AnimatePresence: ({ children }: any) => children,
+    useReducedMotion: () => false,
   }
 })
 

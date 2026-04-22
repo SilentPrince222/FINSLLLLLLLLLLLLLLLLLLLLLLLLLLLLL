@@ -29,8 +29,8 @@ export default function EventsPage() {
     const [events, setEvents] = useState<Event[]>(mockEvents)
     const [showCreateModal, setShowCreateModal] = useState(false)
 
-    const handleCreateEvent = (eventData: { title: string; date: string; description: string }) => {
-        const [date, time] = eventData.date.split('T')
+    const handleCreateEvent = (eventData: { title: string; due_date: string; description: string }) => {
+        const [date, time] = eventData.due_date.split('T')
         const newEvent: Event = {
             id: Date.now(),
             title: eventData.title,

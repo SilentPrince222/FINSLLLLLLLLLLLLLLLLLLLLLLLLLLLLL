@@ -15,20 +15,20 @@ type Student = {
 }
 
 const initialStudents: Student[] = [
-    { id: 1, name: 'John Smith', email: 'john@college.edu', group: 'CS-21', grade: 92, status: 'active', enrolled: 'Sep 2025' },
-    { id: 2, name: 'Emma Wilson', email: 'emma@college.edu', group: 'CS-21', grade: 88, status: 'active', enrolled: 'Sep 2025' },
-    { id: 3, name: 'Michael Brown', email: 'michael@college.edu', group: 'CS-22', grade: 85, status: 'active', enrolled: 'Sep 2025' },
-    { id: 4, name: 'Sarah Davis', email: 'sarah@college.edu', group: 'CS-22', grade: 90, status: 'active', enrolled: 'Sep 2025' },
-    { id: 5, name: 'James Miller', email: 'james@college.edu', group: 'CS-23', grade: 78, status: 'inactive', enrolled: 'Sep 2024' },
-    { id: 6, name: 'Emily Johnson', email: 'emily@college.edu', group: 'CS-21', grade: 95, status: 'active', enrolled: 'Sep 2025' },
-    { id: 7, name: 'David Lee', email: 'david@college.edu', group: 'CS-23', grade: 82, status: 'active', enrolled: 'Sep 2024' },
+    { id: 1, name: 'Айдар Сейтқали', email: 'aidar@demo.edu', group: 'IT-21', grade: 92, status: 'active', enrolled: 'Қыр 2025' },
+    { id: 2, name: 'Дана Бекова', email: 'dana@demo.edu', group: 'IT-21', grade: 88, status: 'active', enrolled: 'Қыр 2025' },
+    { id: 3, name: 'Нурлан Жақсыбеков', email: 'nurlan@demo.edu', group: 'IT-22', grade: 85, status: 'active', enrolled: 'Қыр 2025' },
+    { id: 4, name: 'Арман Қасымов', email: 'arman@demo.edu', group: 'IT-22', grade: 90, status: 'active', enrolled: 'Қыр 2025' },
+    { id: 5, name: 'Болат Досжанов', email: 'bolat@demo.edu', group: 'IT-23', grade: 78, status: 'inactive', enrolled: 'Қыр 2024' },
+    { id: 6, name: 'Айгерім Мұхамбетова', email: 'aigerim@demo.edu', group: 'IT-21', grade: 95, status: 'active', enrolled: 'Қыр 2025' },
+    { id: 7, name: 'Асель Тасбекова', email: 'asel@demo.edu', group: 'IT-23', grade: 82, status: 'active', enrolled: 'Қыр 2024' },
 ]
 
 const groupOptions = [
     { value: 'all', label: 'All Groups' },
-    { value: 'CS-21', label: 'CS-21' },
-    { value: 'CS-22', label: 'CS-22' },
-    { value: 'CS-23', label: 'CS-23' },
+    { value: 'IT-21', label: 'IT-21' },
+    { value: 'IT-22', label: 'IT-22' },
+    { value: 'IT-23', label: 'IT-23' },
 ]
 
 const statusOptions = [

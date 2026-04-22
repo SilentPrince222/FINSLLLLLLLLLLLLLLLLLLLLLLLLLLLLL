@@ -1,14 +1,27 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { GoogleGenAI } from '@google/genai'
 import type { Database } from '@/types/database'
 
-// Basic rate limiting
-// Bug 3.2: rewrite as a single atomic check-and-increment so the 6th request
-// in a window is reliably rejected (old code had an increment-after-check race)
+// Basic rate limiting — atomic check-and-increment (bugfix 3.2)
 const rateLimit = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT_MAX = 5
 const RATE_LIMIT_WINDOW_MS = 60_000
+
+// HIGH #11: prune stale entries once per window so the Map doesn't grow unbounded.
+// Using a single global interval avoids one timer per request.
+let rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null
+if (!rateLimitCleanupInterval) {
+    rateLimitCleanupInterval = setInterval(() => {
+        const now = Date.now()
+        for (const [key, entry] of rateLimit.entries()) {
+            if (now >= entry.resetAt) rateLimit.delete(key)
+        }
+    }, RATE_LIMIT_WINDOW_MS)
+    // don't keep the Node process alive just for the sweep
+    ;(rateLimitCleanupInterval as any).unref?.()
+}
 
 function checkRateLimit(userId: string): boolean {
     const now = Date.now()
@@ -36,49 +49,58 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     })
 }
 
-// Bug 3.9: typed grade interface — no `any`
+// MEDIUM #16: sanitize user-supplied subject names before embedding in prompts/responses
+function sanitize(s: string): string {
+    return String(s).replace(/[<>&"']/g, c => ({
+        '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;',
+    }[c] ?? c))
+}
+
 interface GradeInput {
     subject: string
     score: number
 }
 
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'
+const FALLBACK_MODEL = 'gemini-2.5-flash'
+
 export async function POST(request: Request) {
-    // Bug 3.1: validate Content-Type is application/json when the header is present
+    // Bug 3.1: validate Content-Type
     const contentType = request.headers?.get?.('content-type') ?? null
     if (contentType !== null && !contentType.includes('application/json')) {
         return NextResponse.json({ error: 'Unsupported Media Type' }, { status: 415 })
     }
 
-    // Bug 3.5: check Content-Length before parsing body
+    // Bug 3.5: Content-Length guard
     const contentLength = parseInt(request.headers?.get?.('content-length') ?? '0', 10)
     if (contentLength > 100000) {
         return NextResponse.json({ error: 'Payload Too Large' }, { status: 413 })
     }
 
-    // Validate authenticated user
+    // Auth
     const supabase = createRouteHandlerClient<Database>({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
-
     if (!user) {
-        // Bug 3.10: warn on unauthenticated access
         console.warn('[analyze] unauthenticated request blocked')
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Bug 3.2: atomic check-and-increment
+    // Rate limit
     if (!checkRateLimit(user.id)) {
         return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    // Validate input
-    const { grades } = await request.json()
-
-    // Bug 3.4 + 3.7: empty array causes division by zero; non-array should use same error message
+    // Parse + validate input — guard against malformed JSON bodies
+    let body: any
+    try {
+        body = await request.json()
+    } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    }
+    const grades = body?.grades
     if (!grades || !Array.isArray(grades) || grades.length === 0 || grades.length > 50) {
         return NextResponse.json({ error: 'Invalid grade data' }, { status: 400 })
     }
-
-    // Validate grade structure
     for (const grade of grades) {
         if (
             typeof grade.score !== 'number' ||
@@ -91,47 +113,72 @@ export async function POST(request: Request) {
         }
     }
 
-    // Bug 3.8: guard against a hanging upstream call (Supabase / LLM)
-    try {
-        await withTimeout(Promise.resolve(), SUPABASE_TIMEOUT_MS)
-    } catch {
-        return NextResponse.json({ error: 'Gateway timeout' }, { status: 504 })
-    }
-
-    // Analysis logic — Bug 3.9: typed, no `any`
     const typedGrades = grades as GradeInput[]
-    const avgScore = Math.round(
-        typedGrades.reduce((sum: number, g: GradeInput) => sum + g.score, 0) / typedGrades.length
-    )
-    const weakSubjects = typedGrades.filter((g: GradeInput) => g.score < 65).map((g: GradeInput) => g.subject)
-    const strongSubjects = typedGrades.filter((g: GradeInput) => g.score >= 80).map((g: GradeInput) => g.subject)
 
-    let level = 'Below Average'
-    if (avgScore >= 80) level = 'Excellent'
-    else if (avgScore >= 70) level = 'Good'
-    else if (avgScore >= 60) level = 'Average'
+    // If no API key configured, fail cleanly rather than throwing inside the SDK
+    if (!process.env.GEMINI_API_KEY) {
+        return NextResponse.json({ error: 'AI temporarily unavailable' }, { status: 503 })
+    }
 
-    const recommendations: string[] = []
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
-    if (weakSubjects.length > 0) {
-        recommendations.push(`Focus extra practice on: ${weakSubjects.join(', ')}`)
-    }
-    if (strongSubjects.length > 0) {
-        recommendations.push(`You are doing great in: ${strongSubjects.join(', ')}`)
-    }
-    if (avgScore < 65) {
-        recommendations.push('Consider daily 30min revision sessions')
-    }
-    if (avgScore >= 70) {
-        recommendations.push('Keep up the good work!')
-    }
-    recommendations.push('Try to maintain consistent study schedule')
+    // MEDIUM #16: sanitize subjects before embedding in prompt
+    const gradeLines = typedGrades.map(g => `${sanitize(g.subject)}: ${g.score}`).join('\n')
+    const prompt = `Ты образовательный аналитик казахстанского колледжа.
+Студент получил следующие оценки (шкала 0-100):
+${gradeLines}
 
-    return NextResponse.json({
-        average: avgScore,
-        level,
-        weakSubjects,
-        strongSubjects,
-        recommendations
-    })
+Проанализируй успеваемость. Отвечай ТОЛЬКО валидным JSON в указанной схеме.`
+
+    const schema = {
+        type: 'object',
+        properties: {
+            average: { type: 'number' },
+            level: { type: 'string', enum: ['Excellent', 'Good', 'Average', 'Below Average'] },
+            weakSubjects: { type: 'array', items: { type: 'string' } },
+            strongSubjects: { type: 'array', items: { type: 'string' } },
+            summary: { type: 'string' },
+            recommendations: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['average', 'level', 'weakSubjects', 'strongSubjects', 'summary', 'recommendations'],
+    }
+
+    const callGemini = (model: string) =>
+        ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: { responseMimeType: 'application/json', responseSchema: schema as any },
+        })
+
+    let response: Awaited<ReturnType<typeof callGemini>>
+    try {
+        response = await withTimeout(callGemini(MODEL), SUPABASE_TIMEOUT_MS)
+    } catch (err: any) {
+        if (err?.status === 404 || /NOT_FOUND/i.test(err?.message ?? '')) {
+            try {
+                response = await withTimeout(callGemini(FALLBACK_MODEL), SUPABASE_TIMEOUT_MS)
+            } catch {
+                return NextResponse.json({ error: 'AI temporarily unavailable' }, { status: 503 })
+            }
+        } else if (err?.message === 'timeout') {
+            return NextResponse.json({ error: 'Gateway timeout' }, { status: 504 })
+        } else {
+            return NextResponse.json({ error: 'AI temporarily unavailable' }, { status: 503 })
+        }
+    }
+
+    const rawText = response.text
+    if (!rawText) {
+        return NextResponse.json({ error: 'AI temporarily unavailable' }, { status: 503 })
+    }
+
+    try {
+        const parsed = JSON.parse(rawText)
+        // MEDIUM #16: sanitize any subject names the model echoes back
+        if (Array.isArray(parsed.weakSubjects)) parsed.weakSubjects = parsed.weakSubjects.map((s: string) => sanitize(s))
+        if (Array.isArray(parsed.strongSubjects)) parsed.strongSubjects = parsed.strongSubjects.map((s: string) => sanitize(s))
+        return NextResponse.json(parsed)
+    } catch {
+        return NextResponse.json({ error: 'AI temporarily unavailable' }, { status: 503 })
+    }
 }

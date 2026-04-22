@@ -22,9 +22,11 @@ export default function QuickLinksSection() {
       </div>
       <div className="grid grid-cols-2 gap-2">
         {quickLinks.map((link, i) => (
-          <Button key={i} variant="secondary" size="sm" className="text-xs">
-            {link.label}
-          </Button>
+          <a key={i} href={link.href}>
+            <Button variant="secondary" size="sm" className="text-xs w-full">
+              {link.label}
+            </Button>
+          </a>
         ))}
       </div>
     </Card>

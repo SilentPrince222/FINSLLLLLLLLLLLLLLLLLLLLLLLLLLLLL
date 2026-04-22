@@ -1,129 +1,66 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import { supabase } from './supabase'
+import { getProfile } from './database'
 import type { User } from '@supabase/supabase-js'
 
-// Mock user for development
-const MOCK_USERS = [
-  {
-    id: 'student-1',
-    email: 'student@demo.com',
-    user_metadata: { role: 'student', full_name: 'Иван Иванов' },
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'teacher-1',
-    email: 'teacher@demo.com',
-    user_metadata: { role: 'teacher', full_name: 'Мария Петрова' },
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'admin-1',
-    email: 'admin@demo.com',
-    user_metadata: { role: 'admin', full_name: 'Администратор' },
-    created_at: new Date().toISOString()
-  }
-]
+type Role = 'student' | 'teacher' | 'parent' | 'admin'
 
 type AuthContextType = {
     user: User | null
+    role: string | null
     loading: boolean
     signIn: (_email: string, _password: string) => Promise<any>
-    signUp: (_email: string, _password: string, _role: 'student' | 'teacher' | 'parent' | 'admin') => Promise<any>
+    signUp: (_email: string, _password: string, _role: Role) => Promise<any>
     signOut: () => Promise<any>
     refreshUser: () => void
-    checkRole: (_role: 'student' | 'teacher' | 'parent' | 'admin') => boolean
+    checkRole: (_role: Role) => boolean
     getUserRole: () => string
     getDashboardUrl: () => string
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+async function resolveRole(userId: string): Promise<string | null> {
+    try {
+        const { data } = await getProfile(userId)
+        return (data as any)?.role ?? null
+    } catch {
+        return null
+    }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null)
+    const [role, setRole] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
     const router = useRouter()
 
-    const refreshUser = () => {
-        const mockUserData = localStorage.getItem('mock_user')
-        if (mockUserData) {
-            try {
-                const mockUser = JSON.parse(mockUserData)
-                setUser(mockUser)
-                setLoading(false)
-            } catch (e) {
-                localStorage.removeItem('mock_user')
-                setUser(null)
-                setLoading(false)
-            }
-        } else {
-            setUser(null)
-            setLoading(false)
-        }
+    const refreshUser = async () => {
+        const { data: { user: current } } = await supabase.auth.getUser()
+        setUser(current)
+        setRole(current ? await resolveRole(current.id) : null)
+        setLoading(false)
     }
 
     useEffect(() => {
         let mounted = true
 
-        // Check for mock user in localStorage first (development mode)
-        const mockUserData = localStorage.getItem('mock_user')
-        if (mockUserData) {
-            try {
-                const mockUser = JSON.parse(mockUserData)
-                setUser(mockUser)
-                setLoading(false)
-                return
-            } catch (e) {
-                localStorage.removeItem('mock_user')
+        // onAuthStateChange fires INITIAL_SESSION synchronously on subscribe —
+        // use it as the single source of truth instead of racing it against getUser().
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: string, session: any) => {
+            if (!mounted) return
+            const current = session?.user ?? null
+            setUser(current)
+            if (current) {
+                const r = await resolveRole(current.id)
+                if (mounted) setRole(r)
+            } else {
+                setRole(null)
             }
-        }
-
-        // Development mode: auto-login with mock student user, but only if the
-        // user has not explicitly signed out (Bug 10.6).
-        if (process.env.NODE_ENV === 'development') {
-            if (!localStorage.getItem('mock_signed_out')) {
-                const devUser = {
-                    id: 'student-1',
-                    email: 'student@demo.com',
-                    user_metadata: { role: 'student', full_name: 'Иван Иванов' },
-                    created_at: new Date().toISOString()
-                } as unknown as User
-                localStorage.setItem('mock_user', JSON.stringify(devUser))
-                setUser(devUser)
-                setLoading(false)
-                return
-            }
-            // User explicitly signed out in this browser — stay logged out
-            setUser(null)
             setLoading(false)
-            return
-        }
-
-        // Fall back to Supabase auth
-        const getUser = async () => {
-            try {
-                const { data: { user } } = await supabase.auth.getUser()
-                if (mounted) {
-                    setUser(user)
-                    setLoading(false)
-                }
-            } catch (error) {
-                // If Supabase fails, stay in loading state
-                if (mounted) {
-                    setLoading(false)
-                }
-            }
-        }
-
-        getUser()
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
-            if (mounted) {
-                setUser(session?.user ?? null)
-                setLoading(false)
-            }
         })
 
         return () => {
@@ -134,14 +71,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const value = {
         user,
+        role,
         loading,
         signIn: (email: string, password: string) => signIn(email, password),
-        signUp: (email: string, password: string, role: 'student' | 'teacher' | 'parent' | 'admin') => signUp(email, password, role),
+        signUp: (email: string, password: string, r: Role) => signUp(email, password, r),
         signOut: () => signOut(),
         refreshUser,
-        checkRole: (role: any) => checkRole(user, role),
+        checkRole: (r: Role) => checkRole(user, r),
         getUserRole: () => getUserRole(user),
-        getDashboardUrl: () => getDashboardUrl(getUserRole(user))
+        getDashboardUrl: () => getDashboardUrl(role ?? getUserRole(user)),
     }
 
     return React.createElement(AuthContext.Provider, { value }, children)
@@ -155,56 +93,25 @@ export function useAuth() {
     return context
 }
 
-
 export async function signIn(email: string, password: string) {
-    // Bug 10.6: when the user actively signs in, clear the "signed out" flag
-    localStorage.removeItem('mock_signed_out')
-    // Check for mock users first
-    const mockUser = MOCK_USERS.find(u => u.email === email)
-    if (mockUser && password === 'demo123') {
-        localStorage.setItem('mock_user', JSON.stringify(mockUser))
-        return { data: { user: mockUser }, error: null }
-    }
-
-    // Fall back to Supabase
     return supabase.auth.signInWithPassword({ email, password })
 }
 
-export async function signUp(email: string, password: string, role: 'student' | 'teacher' | 'parent' | 'admin') {
-    // For development, just create a mock user
-    const mockUser = {
-        id: `user-${Date.now()}`,
+export async function signUp(email: string, password: string, role: Role) {
+    return supabase.auth.signUp({
         email,
-        user_metadata: { role, full_name: email.split('@')[0] },
-        created_at: new Date().toISOString()
-    }
-
-    localStorage.setItem('mock_user', JSON.stringify(mockUser))
-    return { data: { user: mockUser }, error: null }
-
-    // In production, use Supabase
-    // return supabase.auth.signUp({
-    //     email,
-    //     password,
-    //     options: {
-    //         data: { role }
-    //     }
-    // })
+        password,
+        options: { data: { role } },
+    })
 }
 
 export async function signOut() {
-    // Bug 10.6: clear mock_user AND mark that the user explicitly logged out
-    // so the dev-mode auto-login in AuthProvider does not re-insert the session
-    // after the browser is reopened.
-    localStorage.removeItem('mock_user')
-    localStorage.setItem('mock_signed_out', '1')
     return supabase.auth.signOut()
 }
 
-export function checkRole(user: User | null, role: 'student' | 'teacher' | 'parent' | 'admin'): boolean {
+export function checkRole(user: User | null, role: Role): boolean {
     if (!user) return false
-    const userRole = user.user_metadata?.role
-    return userRole === role
+    return user.user_metadata?.role === role
 }
 
 export function getUserRole(user: User | null): string {

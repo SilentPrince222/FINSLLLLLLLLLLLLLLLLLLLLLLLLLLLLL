@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth'
 
 type User = {
     id: number
@@ -13,11 +14,11 @@ type User = {
 }
 
 const mockUsers: User[] = [
-    { id: 1, name: 'Иван Иванов', email: 'ivan@test.com', role: 'student', group: 'ИС-21', status: 'active' },
-    { id: 2, name: 'Мария Петрова', email: 'mary@test.com', role: 'student', group: 'ИС-21', status: 'active' },
-    { id: 3, name: 'Алексей Сидоров', email: 'alex@test.com', role: 'teacher', status: 'active' },
-    { id: 4, name: 'Елена Смирнова', email: 'elena@test.com', role: 'parent', status: 'active' },
-    { id: 5, name: 'Админ', email: 'admin@test.com', role: 'admin', status: 'active' },
+    { id: 1, name: 'Айдар Алимов', email: 'aidar.alimov@demo.edu', role: 'student', group: 'IT-21', status: 'active' },
+    { id: 2, name: 'Айгерим Серикбаева', email: 'aigerim.serikbaeva@demo.edu', role: 'student', group: 'IT-21', status: 'active' },
+    { id: 3, name: 'Жанар Мұратқызы', email: 'teacher@demo.edu', role: 'teacher', status: 'active' },
+    { id: 4, name: 'Асель Касымова', email: 'asel.kasymova@demo.edu', role: 'parent', status: 'active' },
+    { id: 5, name: 'Әкімші', email: 'admin@demo.edu', role: 'admin', status: 'active' },
 ]
 
 const roleLabels: Record<User['role'], { label: string; color: string }> = {
@@ -29,7 +30,16 @@ const roleLabels: Record<User['role'], { label: string; color: string }> = {
 
 export default function AdminDashboard() {
     const router = useRouter()
+    const { user, loading } = useAuth()
     const [users, setUsers] = useState<User[]>(mockUsers)
+
+    useEffect(() => {
+        if (!loading && (!user || user.user_metadata?.role !== 'admin')) {
+            router.push('/')
+        }
+    }, [user, loading, router])
+
+    if (loading || !user || user.user_metadata?.role !== 'admin') return null
     const [filter, setFilter] = useState<string>('all')
     const [showAddModal, setShowAddModal] = useState(false)
     const [search, setSearch] = useState('')

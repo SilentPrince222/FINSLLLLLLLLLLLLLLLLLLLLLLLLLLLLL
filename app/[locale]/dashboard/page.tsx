@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth, signOut } from '@/lib/auth'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Navigation from '@/components/ui/Navigation'
 import { useGrades, useTimetable, useEvents } from '@/hooks'
 import {
@@ -16,38 +16,42 @@ import {
 export default function Dashboard() {
     const { user, loading: authLoading } = useAuth()
     const router = useRouter()
-    const { grades, loading: gradesLoading } = useGrades()
+    const params = useParams()
+    const locale = (params?.locale as string) ?? 'ru'
+    const { grades, loading: gradesLoading, recentIds } = useGrades()
     const { entries: timetable, loading: timetableLoading } = useTimetable()
     const { events, loading: eventsLoading } = useEvents()
 
     const [news, setNews] = useState<any[]>([])
 
-    // Mock data for now - replace with actual API calls later
     useEffect(() => {
-        setNews([
-            {
-                id: 1,
-                title: 'New AI Research Lab Opens',
-                date: '2026-04-15',
-                preview: 'Our college has launched a cutting-edge AI research facility featuring the latest quantum computing technology.',
-                image: '/images/news/ai-lab.jpg'
-            },
-            {
-                id: 2,
-                title: 'Student Innovation Awards 2026',
-                date: '2026-04-10',
-                preview: 'Congratulations to our students who won national innovation awards for their sustainable energy projects.',
-                image: '/images/news/awards.jpg'
-            },
-            {
-                id: 3,
-                title: 'International Conference Hosted',
-                date: '2026-04-05',
-                preview: 'We successfully hosted the annual International Technology Conference with speakers from top global companies.',
-                image: '/images/news/conference.jpg'
-            }
-        ])
-        return () => {}
+        let mounted = true
+        if (mounted) {
+            setNews([
+                {
+                    id: 1,
+                    title: 'New AI Research Lab Opens',
+                    date: '2026-04-15',
+                    preview: 'Our college has launched a cutting-edge AI research facility featuring the latest quantum computing technology.',
+                    image: '/images/news/ai-lab.jpg'
+                },
+                {
+                    id: 2,
+                    title: 'Student Innovation Awards 2026',
+                    date: '2026-04-10',
+                    preview: 'Congratulations to our students who won national innovation awards for their sustainable energy projects.',
+                    image: '/images/news/awards.jpg'
+                },
+                {
+                    id: 3,
+                    title: 'International Conference Hosted',
+                    date: '2026-04-05',
+                    preview: 'We successfully hosted the annual International Technology Conference with speakers from top global companies.',
+                    image: '/images/news/conference.jpg'
+                }
+            ])
+        }
+        return () => { mounted = false }
     }, [])
 
     if (authLoading || gradesLoading || timetableLoading || eventsLoading) {
@@ -62,7 +66,6 @@ export default function Dashboard() {
         )
     }
 
-    const locale = 'ru'
     const navItems = [
         { label: 'Dashboard', href: `/${locale}/dashboard`, icon: '📊', onClick: () => router.push(`/${locale}/dashboard`) },
         { label: 'Grades', href: `/${locale}/dashboard/grades`, icon: '📚', onClick: () => router.push(`/${locale}/dashboard/grades`) },
@@ -83,7 +86,7 @@ export default function Dashboard() {
                         <UpNextSection timetable={timetable.map(t => ({ id: t.id, subject: t.subject, day: t.day, start_time: t.start_time, end_time: t.end_time, room: t.room }))} />
 
                         {/* Grades Summary - GPA and weekly progress */}
-                        <GradesSummarySection grades={grades} />
+                        <GradesSummarySection grades={grades} recentIds={recentIds} />
 
                         {/* Deadlines - Tasks due soon */}
                         <DeadlinesSection events={events} />

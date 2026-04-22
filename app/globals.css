@@ -220,3 +220,19 @@
 .animate-scale-in {
   animation: scale-in 0.2s ease-out;
 }
+
+/* §7.4 — pulse for just-arrived grade cards over Realtime */
+@keyframes grade-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.25);
+    transform: scale(1.02);
+  }
+}
+
+.animate-grade-pulse {
+  animation: grade-pulse 2s ease-out 3;
+}

@@ -175,3 +175,88 @@ $$ language sql stable;
 - Maintains referential integrity
 - Prevents invalid data with constraints
 - Works with existing TypeScript types
+
+---
+
+## 🔧 Backend MVP Migration (2026-04-22)
+
+Run this migration in Supabase SQL Editor. Every statement is wrapped for idempotent re-runs.
+
+```sql
+-- §4.1 pre-req — extend user_role enum with 'parent' if the original migration didn't.
+-- ALTER TYPE ... ADD VALUE cannot run inside a transaction; run this block first on its own.
+alter type user_role add value if not exists 'parent';
+
+-- §4.1 additional columns (all idempotent)
+alter table profiles add column if not exists group_name text;
+alter table profiles add column if not exists attendance_rate int
+  check (attendance_rate between 0 and 100);
+alter table grades add column if not exists teacher_id uuid references profiles(id);
+alter table grades add column if not exists comment text;
+
+-- §4.1b semester CHECK — use NOT VALID so existing rows don't block the ALTER.
+-- After the seed script replaces/backfills every row, run VALIDATE separately.
+alter table grades drop constraint if exists grades_semester_fixed;
+alter table grades add constraint grades_semester_fixed
+  check (semester = '2026-1') not valid;
+-- Only run VALIDATE once the seed has rewritten all rows to semester='2026-1':
+--   alter table grades validate constraint grades_semester_fixed;
+
+-- §4.1a RLS — teacher attribution. The base schema has "Teachers manage grades" FOR ALL
+-- which permissively grants INSERT too. Drop it and split into narrow policies, else the
+-- new with-check policy is shadowed and becomes a no-op.
+drop policy if exists "Teachers manage grades" on grades;
+drop policy if exists "Teachers can insert grades" on grades;
+drop policy if exists "Teachers insert grades they authored" on grades;
+drop policy if exists "Teachers select all grades" on grades;
+drop policy if exists "Teachers update grades" on grades;
+drop policy if exists "Teachers delete grades" on grades;
+
+create policy "Teachers select all grades"
+  on grades for select
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'teacher'));
+
+create policy "Teachers insert grades they authored"
+  on grades for insert
+  with check (
+    auth.uid() = teacher_id
+    and exists (select 1 from profiles where id = auth.uid() and role = 'teacher')
+  );
+
+create policy "Teachers update grades"
+  on grades for update
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'teacher'));
+
+create policy "Teachers delete grades"
+  on grades for delete
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'teacher'));
+
+-- §4.2 realtime publication — ALTER PUBLICATION has no IF NOT EXISTS, wrap to swallow dup errors
+do $$
+begin
+  alter publication supabase_realtime add table grades;
+exception when duplicate_object then
+  null;
+end $$;
+alter table grades replica identity full;
+
+-- Index for the new teacher_id FK column (teacher page filters by teacher_id)
+create index if not exists idx_grades_teacher_id on grades (teacher_id);
+```
+
+**Verify:**
+```sql
+select * from pg_publication_tables where pubname='supabase_realtime';
+-- expect a row with schemaname=public, tablename=grades
+```
+
+### Post-seed DDL
+
+Run **after** `npm run seed` completes, so all existing rows already have values:
+
+```sql
+alter table grades alter column teacher_id set not null;
+alter table profiles drop constraint if exists group_name_required_for_students;
+alter table profiles add constraint group_name_required_for_students
+  check (role <> 'student' or group_name is not null);
+```

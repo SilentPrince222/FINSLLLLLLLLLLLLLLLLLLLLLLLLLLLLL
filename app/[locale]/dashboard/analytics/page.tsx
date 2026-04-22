@@ -38,6 +38,10 @@ const mockAttendance: AttendanceData[] = [
 
 const subjects = ['Математика', 'Физика', 'Программирование', 'Английский']
 const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн']
+const monthMap: Record<string, string> = {
+    'Янв': '01', 'Фев': '02', 'Мар': '03', 'Апр': '04', 'Май': '05', 'Июн': '06',
+    'Июл': '07', 'Авг': '08', 'Сен': '09', 'Окт': '10', 'Ноя': '11', 'Дек': '12',
+}
 
 export default function AnalyticsPage() {
     const [period, setPeriod] = useState('4')
@@ -53,10 +57,11 @@ export default function AnalyticsPage() {
     const totalAvg = Math.round(subjectAverages.reduce((sum, s) => sum + s.value, 0) / subjectAverages.length)
     
     const progressData = months.slice(0, parseInt(period)).map((month, i) => {
-        const monthGrades = mockGrades.filter(g => g.date.startsWith(months[i].toLowerCase()))
+        const monthNum = monthMap[months[i]]
+        const monthGrades = mockGrades.filter(g => monthNum ? g.date.endsWith(`-${monthNum}`) : false)
         return {
             label: month,
-            value: monthGrades.length > 0 
+            value: monthGrades.length > 0
                 ? Math.round(monthGrades.reduce((sum, g) => sum + g.score, 0) / monthGrades.length)
                 : 0
         }

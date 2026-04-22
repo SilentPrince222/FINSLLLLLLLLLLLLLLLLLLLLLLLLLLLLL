@@ -1,41 +1,60 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from '@/i18n/routing'
+import { toast } from 'sonner'
+import { useAuth, signOut } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
+import { createGrade } from '@/lib/database'
+import { SEMESTER, SUBJECTS } from '@/lib/constants'
+import type { Database } from '@/types/database'
 
-type Student = {
-    id: number
-    name: string
-    group: string
-    avgGrade: number
-    attendance: number
-}
-
-const mockStudents: Student[] = [
-    { id: 1, name: 'Алексей Петров', group: 'ИС-21', avgGrade: 85, attendance: 95 },
-    { id: 2, name: 'Мария Иванова', group: 'ИС-21', avgGrade: 92, attendance: 100 },
-    { id: 3, name: 'Дмитрий Сидоров', group: 'ИС-21', avgGrade: 78, attendance: 88 },
-    { id: 4, name: 'Елена Смирнова', group: 'ИС-22', avgGrade: 88, attendance: 92 },
-    { id: 5, name: 'Иван Иванов', group: 'ИС-22', avgGrade: 72, attendance: 85 },
-]
-
-type Grade = {
-    id: number
-    studentId: number
-    subject: string
-    score: number
-    date: string
-}
+type Profile = Database['public']['Tables']['profiles']['Row']
 
 export default function TeacherDashboard() {
     const router = useRouter()
-    const [students] = useState<Student[]>(mockStudents)
-    const [selectedStudent, setSelectedStudent] = useState<number | null>(null)
-    const [grades, setGrades] = useState<Grade[]>([])
-    const [selectedSubject, setSelectedSubject] = useState('Математика')
-    const [newScore, setNewScore] = useState('')
+    const { user, role, loading } = useAuth()
 
-    const subjects = ['Математика', 'Физика', 'Программирование', 'Английский']
+    const [students, setStudents] = useState<Profile[]>([])
+    const [selectedStudent, setSelectedStudent] = useState<string | null>(null)
+    const [selectedSubject, setSelectedSubject] = useState<string>(SUBJECTS[0])
+    const [newScore, setNewScore] = useState('')
+    const [comment, setComment] = useState('')
+    // Track which student id is currently saving so parallel submits can't race
+    const [savingId, setSavingId] = useState<string | null>(null)
+    const [loadingStudents, setLoadingStudents] = useState(true)
+
+    // Route guard — redirect non-teachers to their dashboard
+    useEffect(() => {
+        if (loading) return
+        if (!user) { router.push('/auth/login'); return }
+        if (role && role !== 'teacher') { router.push('/dashboard'); return }
+    }, [loading, user, role, router])
+
+    useEffect(() => {
+        if (!user || role !== 'teacher') return
+        let cancelled = false
+        ;(async () => {
+            setLoadingStudents(true)
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('role', 'student')
+                .order('full_name')
+            if (cancelled) return
+            if (error) {
+                toast.error('Не удалось загрузить студентов')
+            } else {
+                setStudents((data ?? []) as Profile[])
+            }
+            setLoadingStudents(false)
+        })()
+        return () => { cancelled = true }
+    }, [user, role])
+
+    if (loading || !user || role !== 'teacher') {
+        return <div className="flex items-center justify-center min-h-screen">Загрузка...</div>
+    }
 
     const getGradeColor = (score: number) => {
         if (score >= 85) return 'text-green-600'
@@ -43,22 +62,33 @@ export default function TeacherDashboard() {
         return 'text-red-600'
     }
 
-    const addGrade = (studentId: number) => {
-        if (!newScore) return
-        setGrades([...grades, {
-            id: Date.now(),
-            studentId,
+    async function handleAddGrade(studentId: string) {
+        // Reject if any save is already in flight for any student
+        if (savingId) return
+        const score = parseInt(newScore, 10)
+        if (!Number.isFinite(score) || score < 0 || score > 100) {
+            toast.error('Оценка должна быть от 0 до 100')
+            return
+        }
+        setSavingId(studentId)
+        const { data, error } = await createGrade({
+            student_id: studentId,
+            teacher_id: user!.id,  // RLS rejects if this lies
             subject: selectedSubject,
-            score: parseInt(newScore),
-            date: new Date().toISOString().split('T')[0]
-        }])
-        setNewScore('')
-    }
+            score,
+            semester: SEMESTER,
+            comment: comment.trim() || null,
+        })
+        setSavingId(null)
 
-    const getAvgGrade = (studentId: number) => {
-        const studentGrades = grades.filter(g => g.studentId === studentId)
-        if (studentGrades.length === 0) return students.find(s => s.id === studentId)?.avgGrade || 0
-        return Math.round(studentGrades.reduce((sum, g) => sum + g.score, 0) / studentGrades.length)
+        // createGrade returns { data: null, error: null } on PGRST116 — treat as failure
+        if (error || !data) {
+            toast.error('Не удалось сохранить оценку')
+            return
+        }
+        toast.success(`Оценка ${score} сохранена (${selectedSubject})`)
+        setNewScore('')
+        setComment('')
     }
 
     return (
@@ -66,7 +96,7 @@ export default function TeacherDashboard() {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Панель преподавателя</h1>
                 <button
-                    onClick={() => router.push('/')}
+                    onClick={() => signOut().then(() => router.push('/auth/login'))}
                     className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
                 >
                     Выход
@@ -76,80 +106,83 @@ export default function TeacherDashboard() {
             <div className="grid lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-lg shadow">
                     <div className="p-4 border-b">
-                        <h2 className="font-semibold">Студенты</h2>
+                        <h2 className="font-semibold">Студенты ({students.length})</h2>
                     </div>
-                    <div className="divide-y">
-                        {students.map(student => (
-                            <div key={student.id} className="p-4 hover:bg-gray-50">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex-1 cursor-pointer" onClick={() => setSelectedStudent(selectedStudent === student.id ? null : student.id)}>
-                                        <div className="font-medium">{student.name}</div>
-                                        <div className="text-sm text-gray-500">{student.group}</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className={`font-bold text-lg ${getGradeColor(getAvgGrade(student.id))}`}>
-                                            {getAvgGrade(student.id)}%
+                    {loadingStudents ? (
+                        <div className="p-8 text-center text-gray-500">Загрузка студентов...</div>
+                    ) : students.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">Студентов нет. Запусти `npm run seed`.</div>
+                    ) : (
+                        <div className="divide-y">
+                            {students.map(student => (
+                                <div key={student.id} className="p-4 hover:bg-gray-50">
+                                    <div className="flex justify-between items-center">
+                                        <div
+                                            className="flex-1 cursor-pointer"
+                                            onClick={() => setSelectedStudent(selectedStudent === student.id ? null : student.id)}
+                                        >
+                                            <div className="font-medium">{student.full_name ?? student.email}</div>
+                                            <div className="text-sm text-gray-500">
+                                                {student.group_name ?? '—'} · Посещ: {student.attendance_rate ?? '—'}%
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-gray-400">Посещ: {student.attendance}%</div>
                                     </div>
+
+                                    {selectedStudent === student.id && (
+                                        <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
+                                            <div className="flex gap-3 flex-wrap">
+                                                <select
+                                                    value={selectedSubject}
+                                                    onChange={e => setSelectedSubject(e.target.value)}
+                                                    className="p-2 border rounded"
+                                                >
+                                                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                                </select>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    max={100}
+                                                    value={newScore}
+                                                    onChange={e => setNewScore(e.target.value)}
+                                                    placeholder="Оценка"
+                                                    className="p-2 border rounded w-28"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={comment}
+                                                    onChange={e => setComment(e.target.value)}
+                                                    placeholder="Комментарий (необязательно)"
+                                                    maxLength={200}
+                                                    className="p-2 border rounded flex-1 min-w-[200px]"
+                                                />
+                                                <button
+                                                    onClick={() => handleAddGrade(student.id)}
+                                                    disabled={savingId !== null || !newScore}
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                                                >
+                                                    {savingId === student.id ? '...' : 'Добавить'}
+                                                </button>
+                                            </div>
+                                            <div className={`text-sm ${getGradeColor(parseInt(newScore || '0', 10))}`}>
+                                                {newScore ? `Будет сохранено: ${newScore}%` : ' '}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                
-                                {selectedStudent === student.id && (
-                                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                        <div className="flex gap-3 mb-3">
-                                            <select
-                                                value={selectedSubject}
-                                                onChange={(e) => setSelectedSubject(e.target.value)}
-                                                className="p-2 border rounded"
-                                            >
-                                                {subjects.map(s => <option key={s} value={s}>{s}</option>)}
-                                            </select>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={newScore}
-                                                onChange={(e) => setNewScore(e.target.value)}
-                                                placeholder="Оценка"
-                                                className="p-2 border rounded w-24"
-                                            />
-                                            <button
-                                                onClick={() => addGrade(student.id)}
-                                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                                            >
-                                                Добавить
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-4">
                     <div className="bg-white rounded-lg shadow p-4">
-                        <h3 className="font-semibold mb-3">Статистика группы</h3>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Всего студентов</span>
-                                <span className="font-medium">{students.length}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Средний балл</span>
-                                <span className="font-medium">{Math.round(students.reduce((sum, s) => sum + s.avgGrade, 0) / students.length)}%</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Средняя посещаемость</span>
-                                <span className="font-medium">{Math.round(students.reduce((sum, s) => sum + s.attendance, 0) / students.length)}%</span>
-                            </div>
-                        </div>
+                        <h3 className="font-semibold mb-3">Семестр</h3>
+                        <div className="text-sm text-gray-600">{SEMESTER}</div>
                     </div>
-
                     <div className="bg-white rounded-lg shadow p-4">
-                        <h3 className="font-semibold mb-3">Мои предметы</h3>
+                        <h3 className="font-semibold mb-3">Предметы</h3>
                         <div className="space-y-2">
-                            {subjects.map(s => (
+                            {SUBJECTS.map(s => (
                                 <div key={s} className="p-2 bg-gray-50 rounded text-sm">{s}</div>
                             ))}
                         </div>

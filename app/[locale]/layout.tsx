@@ -6,6 +6,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { AuthProvider } from '@/lib/auth';
 import { SupabaseProvider } from '@/lib/supabase';
+import { Toaster } from 'sonner';
 
 const inter = Inter({
     subsets: ["latin", "cyrillic"],
@@ -44,6 +45,7 @@ export default async function RootLayout({
                         >
                             <NextIntlClientProvider messages={messages}>
                                 {children}
+                                <Toaster position="top-right" richColors />
                             </NextIntlClientProvider>
                         </ThemeProvider>
                     </SupabaseProvider>

@@ -4,6 +4,22 @@ import path from 'path'
 import { cn } from '@/lib/utils'
 import { getGradeColor, getStatusColor, colors } from '@/lib/design-system'
 
+vi.mock('@/i18n/routing', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/ru/dashboard',
+  Link: ({ children }: any) => children,
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/ru/dashboard',
+  useParams: () => ({ locale: 'ru' }),
+}))
+
+vi.mock('@/lib/database', () => ({
+  getProfile: vi.fn().mockResolvedValue({ data: null, error: null }),
+}))
+
 vi.mock('@supabase/auth-helpers-nextjs', () => ({
   createRouteHandlerClient: () => ({
     auth: { getUser: vi.fn() },
@@ -325,6 +341,20 @@ describe('API route /api/ai/analyze', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    process.env.GEMINI_API_KEY = 'test-key'
+    const mockGeminiText = JSON.stringify({
+      average: 80,
+      level: 'Excellent',
+      weakSubjects: [],
+      strongSubjects: ['Math'],
+      summary: 'Good performance',
+      recommendations: ['Keep it up'],
+    })
+    vi.doMock('@google/genai', () => ({
+      GoogleGenAI: class {
+        models = { generateContent: vi.fn().mockResolvedValue({ text: mockGeminiText }) }
+      },
+    }))
     vi.doMock('@supabase/auth-helpers-nextjs', () => ({
       createRouteHandlerClient: () => ({
         auth: { getUser: mockGetUser },
@@ -357,6 +387,10 @@ describe('API route /api/ai/analyze', () => {
       return { NextResponse }
     })
     mockGetUser.mockReset()
+  })
+
+  afterEach(() => {
+    delete process.env.GEMINI_API_KEY
   })
 
   function makeRequest(body: any) {

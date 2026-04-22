@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth'
 
 type Child = {
     id: number
@@ -36,9 +37,18 @@ const mockChild: Child = {
 
 export default function ParentDashboard({ params }: { params?: { locale?: string } }) {
     const router = useRouter()
+    const { user, loading } = useAuth()
     // Bug 10.8: use locale from params so logout redirects to /ru/ or /kk/ prefix
     const locale = (params && params.locale) || 'ru'
     const [child] = useState<Child>(mockChild)
+
+    useEffect(() => {
+        if (!loading && (!user || user.user_metadata?.role !== 'parent')) {
+            router.push('/')
+        }
+    }, [user, loading, router])
+
+    if (loading || !user || user.user_metadata?.role !== 'parent') return null
     const [showAllGrades, setShowAllGrades] = useState(false)
 
     const getGradeColor = (score: number) => {

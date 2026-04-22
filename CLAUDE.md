@@ -12,8 +12,10 @@ Every significant Claude Code session in this project ends with an appended cost
 npm run dev      # start dev server at localhost:3000
 npm run build    # production build
 npm run lint     # ESLint
-npx playwright test              # run all E2E tests
-npx playwright test tests/main.spec.ts  # run specific test file
+npx vitest run                          # unit + tier tests (184 tests; added in 2026-04-22 bugfix)
+npx playwright test                     # run all E2E tests
+npx playwright test tests/main.spec.ts  # run specific E2E file
+# npm run seed                          # requires scripts/seed.ts + tsx (added per docs/superpowers/specs/2026-04-22-edutok-backend-mvp-design.md §8)
 ```
 
 ## Architecture

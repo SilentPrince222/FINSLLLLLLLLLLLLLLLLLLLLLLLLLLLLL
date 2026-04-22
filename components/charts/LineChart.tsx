@@ -5,10 +5,20 @@ interface LineChartProps {
 }
 
 export default function LineChart({ data }: LineChartProps) {
-  const max = Math.max(...data.map(d => d.value))
+  if (data.length === 0) {
+    return (
+      <div className="h-40 flex items-center justify-center text-sm text-gray-400">
+        No data
+      </div>
+    )
+  }
+
+  const max = Math.max(...data.map(d => d.value)) || 1
   const points = data.map((d, i) => ({
-    x: (i / (data.length - 1)) * 100,
-    y: 100 - (d.value / max) * 100
+    x: data.length === 1 ? 50 : (i / (data.length - 1)) * 100,
+    y: 100 - (d.value / max) * 100,
+    label: d.label,
+    value: d.value,
   }))
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
 
@@ -23,13 +33,13 @@ export default function LineChart({ data }: LineChartProps) {
         </defs>
         <path d={path + ' L 100 100 L 0 100 Z'} fill="url(#gradient)" />
         <path d={path} fill="none" stroke="#3b82f6" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#3b82f6" />
+        {points.map((p) => (
+          <circle key={`${p.label}-${p.value}`} cx={p.x} cy={p.y} r="3" fill="#3b82f6" />
         ))}
       </svg>
       <div className="flex justify-between mt-2">
-        {data.map((d, i) => (
-          <div key={i} className="text-xs text-gray-500">{d.label}</div>
+        {data.map((d) => (
+          <div key={`${d.label}-${d.value}`} className="text-xs text-gray-500">{d.label}</div>
         ))}
       </div>
     </div>
