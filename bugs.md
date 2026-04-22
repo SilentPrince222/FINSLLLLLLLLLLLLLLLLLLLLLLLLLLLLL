@@ -1,6 +1,6 @@
 # bugs.md
 
-## 125 bugs found by 15 parallel agents (2026-04-22)
+## 70 open bugs (cleaned 2026-04-22: removed false positives + fixed)
 
 ---
 
@@ -12,17 +12,17 @@
 | 2 | Form validation | 13 | 10 |
 | 3 | TypeScript type safety | 13 | 6 |
 | 4 | Accessibility | 12 | 4 |
-| 5 | Charts & data viz | 10 | 6 |
-| 6 | Memory leaks & perf | 10 | 3 |
+| 5 | Charts & data viz | 6 | 3 |
+| 6 | Memory leaks & perf | 9 | 3 |
 | 7 | Security | 8 | 4 |
-| 8 | Auth & mock mode | 8 | 4 |
+| 8 | Auth & mock mode | 7 | 3 |
 | 9 | Database & Supabase | 7 | 4 |
-| 10 | Mock vs real mode | 7 | 3 |
-| 11 | i18n & routing | 7 | 3 |
-| 12 | Component state | 6 | 1 |
-| 13 | Race conditions | 5 | 2 |
-| 14 | Dashboard & role routing | 5 | 5 |
-| 15 | API routes | 4 | 2 |
+| 10 | Mock vs real mode | 6 | 2 |
+| 11 | i18n & routing | 6 | 2 |
+| 12 | Component state | 5 | 0 |
+| 13 | Race conditions | 4 | 2 |
+| 14 | Dashboard & role routing | 4 | 4 |
+| 15 | API routes | 2 | 0 |
 
 ---
 
@@ -59,48 +59,6 @@ All dashboard pages (`/dashboard`, `/teacher`, `/parent`, `/admin`) check roles 
 
 ---
 
-### C3. Student dashboard has no role verification
-
-**Zone:** Dashboard & role routing | **Confidence:** 95
-
-**File:** `app/[locale]/dashboard/page.tsx:16-67`
-
-Student dashboard only checks `if (!user)` — never validates that `role === 'student'`. Any authenticated user (teacher, admin, parent) can see the student dashboard.
-
-Compare with teacher page which properly checks: `if (role && role !== 'teacher') { router.push('/dashboard'); return }`
-
-**Fix:**
-```tsx
-const { user, role, loading } = useAuth()
-useEffect(() => {
-  if (loading) return
-  if (!user) { router.push(`/${locale}/auth/login`); return }
-  if (role && role !== 'student') { router.push(`/${locale}${getDashboardUrl(role)}`); return }
-}, [loading, user, role, router, locale])
-```
-
----
-
-### C4. Admin/Parent pages bypass DB role checks via stale metadata
-
-**Zone:** Auth & mock mode | **Confidence:** 95
-
-**Files:**
-- `app/[locale]/admin/page.tsx:37,42`
-- `app/[locale]/parent/page.tsx:46,51`
-
-Both pages check `user.user_metadata?.role` directly instead of using the resolved `role` from `useAuth()`. The `role` in auth context is fetched from `profiles` table via `resolveRole()`, but these pages ignore it.
-
-**Impact:** If a user's role is revoked in DB, they can still access admin/parent dashboards via stale JWT metadata.
-
-**Fix:**
-```tsx
-const { user, role, loading } = useAuth()
-if (!loading && (!user || role !== 'admin')) { router.push('/') }
-```
-
----
-
 ### C5. Dark mode broken on 95% of components
 
 **Zone:** Dark mode | **Confidence:** 100
@@ -126,34 +84,6 @@ Theme infrastructure is set up correctly (ThemeProvider, CSS variables, Tailwind
 
 ---
 
-### C6. 15+ components import navigation from wrong source
-
-**Zone:** i18n & routing | **Confidence:** 100
-
-Per CLAUDE.md: "Navigation primitives must be imported from `@/i18n/routing`, not from `next/navigation`."
-
-**Files importing from `next/navigation`:**
-- `components/Layout.tsx:3-4` — `Link`, `usePathname`
-- `components/AuthForm.tsx:5` — `useRouter`
-- `components/RegisterForm.tsx:5` — `useRouter`
-- `components/dashboard/GradesSection.tsx:4` — `useRouter`
-- `components/dashboard/TimetableSection.tsx:4` — `useRouter`
-- `app/[locale]/page.tsx:4` — `useRouter`, `usePathname`
-- `app/[locale]/parent/page.tsx:4` — `useRouter`
-- `app/[locale]/admin/page.tsx:4` — `useRouter`
-- `app/[locale]/dashboard/page.tsx:5` — `useParams`, `useRouter`
-- `app/[locale]/auth/login/page.tsx:4` — `useRouter`
-- `app/[locale]/auth/signup/page.tsx:4` — `useRouter`
-- `app/[locale]/dashboard/curator/page.tsx:4` — `useRouter`
-- `app/[locale]/dashboard/consultation/page.tsx:4` — `useRouter`
-- `app/[locale]/dashboard/qr/page.tsx:4` — `useRouter`
-
-**Impact:** All navigation from these components drops locale prefix (`/ru`, `/kk`), breaking i18n.
-
-**Fix:** Replace `import { useRouter } from 'next/navigation'` with `import { useRouter } from '@/i18n/routing'` in all listed files.
-
----
-
 ### C7. Dual role resolution — metadata vs profiles table
 
 **Zone:** Auth & mock mode / Mock vs real | **Confidence:** 100
@@ -165,9 +95,9 @@ The codebase has two competing sources of truth for user roles:
 
 Different pages use different sources:
 - Teacher page → `useAuth().role` (from profiles table)
-- Admin page → `user.user_metadata?.role` (from JWT)
-- Parent page → `user.user_metadata?.role` (from JWT)
-- Student dashboard → no role check at all
+- Admin page → `role` from `useAuth()` (from profiles table)
+- Parent page → `role` from `useAuth()` (fixed)
+- Student dashboard → `role` from `useAuth()` (fixed)
 
 **Impact:** After signup, `user_metadata.role` is set immediately, but `profiles` row is created async by trigger. During this gap, role sources can diverge.
 
@@ -179,32 +109,33 @@ Different pages use different sources:
 
 **Zone:** Auth & mock mode | **Confidence:** 95
 
-**File:** `app/[locale]/auth/login/page.tsx:29`
+**File:** `app/[locale]/auth/login/page.tsx:93`
 
-After successful login: `router.push('/')`. The `getDashboardUrl()` function exists in AuthContext but is never called. All users (student, teacher, admin) go to the same place.
+After successful login: `router.push('/')`. Homepage then redirects via `getDashboardUrl()`, but this creates a double redirect and a flash of the loading spinner.
 
 **Fix:**
 ```tsx
 await refreshUser()
-router.replace(`/${locale}${getDashboardUrl()}`)
+router.replace(getDashboardUrl() as never)
 ```
 
 ---
 
-### C9. Race condition: `refreshUser()` + `router.push()` via setTimeout(100ms)
+### C9. Race condition: `refreshUser()` + `router.push()` via setTimeout(400ms)
 
 **Zone:** Auth & mock mode / Race conditions | **Confidence:** 90
 
-**File:** `app/[locale]/auth/login/page.tsx:27-30`
+**File:** `app/[locale]/auth/login/page.tsx:88-94`
 
 ```tsx
 setTimeout(() => {
+  if (!mountedRef.current) return
   refreshUser()
   router.push('/')
-}, 100)
+}, 400)
 ```
 
-`refreshUser()` is async but not awaited. `router.push('/')` fires immediately after calling `refreshUser()`, before user state is updated. The 100ms delay is arbitrary — no guarantee `refreshUser()` completes in time.
+`refreshUser()` is async but not awaited. `router.push('/')` fires immediately after calling `refreshUser()`, before user state is updated. The 400ms delay is arbitrary — no guarantee `refreshUser()` completes in time.
 
 **Impact:** Dashboard may see `user: null` and redirect back to login, creating redirect loops on slow networks.
 
@@ -212,63 +143,7 @@ setTimeout(() => {
 
 ---
 
-### C10. Demo credentials don't match seed data
-
-**Zone:** Mock vs real | **Confidence:** 90
-
-**Files:**
-- `app/[locale]/auth/login/page.tsx:43-47` — credentials: `student@demo.com` / `demo123`
-- `scripts/seed.ts:31` — password: `demo12345`, student email: `aidar.alimov@demo.edu`
-
-**Impact:** Demo login buttons fail with "Invalid email or password" in real Supabase mode.
-
-**Fix:**
-```tsx
-const demoCredentials = {
-  student: { email: 'aidar.alimov@demo.edu', password: 'demo12345' },
-  teacher: { email: 'teacher@demo.edu', password: 'demo12345' },
-}
-```
-
----
-
 ## HIGH (fix this week)
-
-### H1. BarChart: division by zero with negative/zero max values
-
-**Zone:** Charts | **Confidence:** 95
-
-**File:** `components/charts/BarChart.tsx:15`
-
-When `max` prop is 0 or negative: `(d.value / max) * 100` produces `Infinity`, `NaN`, or negative heights.
-
-**Fix:** Validate max before use: `const safeMax = max && max > 0 ? max : Math.max(...data.map(d => d.value), 1)`
-
----
-
-### H2. LineChart: no validation for NaN/Infinity/negative values
-
-**Zone:** Charts | **Confidence:** 90
-
-**File:** `components/charts/LineChart.tsx:16-19`
-
-If `d.value` is `NaN`, `Infinity`, or negative, SVG path gets corrupted. `NaN` in `y` coordinate breaks the entire chart.
-
-**Fix:** Add `Number.isFinite()` check, clamp values to `[0, max]`.
-
----
-
-### H3. DonutChart: missing validation for negative/NaN values
-
-**Zone:** Charts | **Confidence:** 90
-
-**File:** `components/charts/DonutChart.tsx:8,35,45`
-
-Negative values produce incorrect `strokeDasharray`. NaN breaks all calculations.
-
-**Fix:** Validate each value before using in SVG calculations.
-
----
 
 ### H4. Missing error handling in timetable page
 
@@ -316,30 +191,6 @@ TypeScript allows `null`, database rejects it at runtime.
 
 ---
 
-### H7. Hydration mismatch — LanguageThemeSwitcher uses theme before mounted
-
-**Zone:** Component state | **Confidence:** 100
-
-**File:** `components/LanguageThemeSwitcher.tsx:86`
-
-Uses `theme` from `useTheme()` directly in render. `theme` is `undefined` on server, causing hydration mismatch.
-
-**Fix:** Add `const [mounted, setMounted] = useState(false)` + `useEffect(() => setMounted(true), [])` pattern.
-
----
-
-### H8. Memory leak: uncleaned setTimeout in login page
-
-**Zone:** Memory leaks | **Confidence:** 100
-
-**File:** `app/[locale]/auth/login/page.tsx:27-30`
-
-`setTimeout` callback fires state updates after component unmount.
-
-**Fix:** Store timeout ID, clear in useEffect cleanup.
-
----
-
 ### H9. Memory leak: setTimeout in useGrades hook
 
 **Zone:** Memory leaks | **Confidence:** 100
@@ -375,30 +226,6 @@ Multiple `setTimeout` calls from drag/upload events without cleanup.
 `signOut().then(() => router.push(...))` — but `onAuthStateChange` fires synchronously, causing route guards to redirect before `.then()` executes. Double navigation.
 
 **Fix:** Navigate immediately, fire `signOut()` without waiting.
-
----
-
-### H12. Rate limit race condition in API analyze route
-
-**Zone:** API routes | **Confidence:** 85
-
-**File:** `app/[locale]/api/ai/analyze/route.ts:26-38`
-
-`entry.count++` is not atomic between check and increment. Concurrent requests can all pass the `>= RATE_LIMIT_MAX` check.
-
-**Fix:** Use `rateLimit.set(userId, { ...entry, count: entry.count + 1 })` for atomic update.
-
----
-
-### H13. NaN/Infinity bypass score validation in API route
-
-**Zone:** API routes | **Confidence:** 90
-
-**File:** `app/[locale]/api/ai/analyze/route.ts:106-108`
-
-`typeof NaN === 'number'` returns true. `NaN < 0` and `NaN > 100` are both `false`. NaN passes validation. `-Infinity < 0` is false, also passes.
-
-**Fix:** Add `!Number.isFinite(grade.score)` check.
 
 ---
 
@@ -500,9 +327,9 @@ In `AuthProvider`, `setUser(current)` fires at line 56, but `setRole(r)` only af
 
 **Zone:** i18n | **Confidence:** 100
 
-20+ instances of `router.push('/dashboard')`, `router.push('/auth/login')` without `/${locale}` prefix.
+Remaining instances of `router.push('/dashboard')`, `router.push('/auth/login')` without `/${locale}` prefix in files not yet migrated to `@/i18n/routing`.
 
-**Files:** AuthForm, GradesSection, TimetableSection, RegisterForm, Layout, teacher page, admin page, parent page, login page.
+**Files:** AuthForm, GradesSection, TimetableSection, RegisterForm, Layout, teacher page, admin page, login page.
 
 ---
 
@@ -513,16 +340,6 @@ In `AuthProvider`, `setUser(current)` fires at line 56, but `setRole(r)` only af
 50+ hardcoded strings in AuthForm ("Вход", "Пароль"), RegisterForm ("Регистрация"), Layout ("Home"), dashboard pages, login page.
 
 **Fix:** All UI strings should use `useTranslations()`.
-
----
-
-### M3. Parent dashboard has hardcoded Russian name "Иван Иванов"
-
-**Zone:** Mock vs real | **Confidence:** 85
-
-**File:** `app/[locale]/parent/page.tsx:17-36`
-
-Violates Kazakhstan context rule — all mock/demo names must be Kazakh.
 
 ---
 
@@ -749,16 +566,6 @@ If a chart throws from malformed data, the entire page crashes instead of gracef
 
 ---
 
-### M26. LineChart duplicate gradient IDs
-
-**Zone:** Charts | **Confidence:** 85
-
-**File:** `components/charts/LineChart.tsx:29-32`
-
-When multiple LineCharts render on same page, `id="gradient"` conflicts. Use unique IDs.
-
----
-
 ### M27. `as any` throughout codebase (20+ instances)
 
 **Zone:** TypeScript type safety | **Confidence:** 80-90
@@ -933,52 +740,25 @@ If `signIn` throws after `router.push('/dashboard')` is called, user is navigate
 
 ### Immediate (today)
 1. C1 — Revoke exposed API keys
-2. C2 + C3 — Add server-side role checks
-3. C10 — Fix demo credentials to match seed data
 
 ### This week
-4. C4 — Use auth context role everywhere
-5. C5 — Dark mode: globals.css + Layout + Modal
-6. C6 — Fix all `next/navigation` imports → `@/i18n/routing`
-7. C7 — Standardize role source
-8. C8 + C9 — Fix login redirect to use role + await refreshUser
-9. H4-H6 — Add error handling in database operations
+2. C2 — Add server-side role checks
+3. C5 — Dark mode: globals.css + Layout + Modal
+4. C7 — Standardize role source
+5. C8 + C9 — Fix login redirect to use role + await refreshUser
+6. H4–H6 — Add error handling in database operations
+7. H20 — Fix role resolution race condition
 
 ### Next sprint
-10. H1-H3 — Chart validation (NaN, Infinity, division by zero)
-11. H7 — Hydration mismatch in LanguageThemeSwitcher
-12. H8-H10 — Memory leak fixes (setTimeout cleanup)
-13. H14-H16 — Form validation improvements
-14. H17 — Security headers
-15. M1-M2 — i18n hardcoded paths and strings
-16. M15-M22 — Accessibility fixes
+8. H9–H11 — Memory leak + race condition fixes
+9. H14–H16 — Form validation improvements
+10. H17 — Security headers
+11. H18–H19 — TypeScript any in auth
+12. M1–M2 — i18n hardcoded paths and strings
+13. M15–M22 — Accessibility fixes
 
 ### Backlog
-17. M5-M7 — Performance (memoization)
-18. M27-M29 — TypeScript type safety cleanup
-19. M30-M32 — Additional security hardening
-20. L1-L11 — Low priority items
-
----
-
-## Previous scan (55 bugs, 10 agents, 2026-04-22)
-
-These bugs from the earlier scan are either fixed or superseded by the findings above:
-
-| # | File | Bug | Status |
-|---|------|-----|--------|
-| 1 | `app/[locale]/teacher/page.tsx` | No role check | Superseded by C2/C4 |
-| 2 | `app/[locale]/admin/page.tsx` | No role check | Superseded by C4 |
-| 3 | `app/[locale]/parent/page.tsx` | No role check | Superseded by C4 |
-| 4 | `components/charts/LineChart.tsx:10` | Division by zero `data.length <= 1` | Superseded by H2 |
-| 5 | `components/charts/DonutChart.tsx:8` | Division by zero empty data | Superseded by H3 |
-| 6 | `.env.local` | Exposed secrets | Superseded by C1 |
-| 7 | `lib/auth.ts:105-121` | Race condition getUser after unmount | Superseded by H20 |
-| 8 | `components/RegisterForm.tsx:28` | State not refreshed after signup | Fixed |
-| 9 | `app/[locale]/auth/login/page.tsx:27` | Fragile setTimeout | Superseded by C9 |
-| 10 | `app/[locale]/auth/login/page.tsx:17` | Missing role-based redirect | Superseded by C8 |
-| 11 | `app/[locale]/dashboard/grades/page.tsx:103` | Unhandled promise | Superseded by H5 |
-| 12 | `app/[locale]/dashboard/timetable/page.tsx:38` | No error handling | Superseded by H4 |
-| 13 | `app/[locale]/dashboard/timetable/page.tsx:64` | No error handling on delete | Superseded by H4 |
-| 14 | `app/[locale]/dashboard/materials/page.tsx:49` | Fake upload | Known, mock-only |
-| 15 | `app/[locale]/api/ai/analyze/route.ts` | Missing auth check | Fixed |
+14. M5–M7 — Performance (memoization)
+15. M27–M29 — TypeScript type safety cleanup
+16. M30–M32 — Additional security hardening
+17. L1–L11 — Low priority items

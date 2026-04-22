@@ -339,7 +339,7 @@ export default function LandingPage() {
                     <div className="container">
                         <div className="sec-head">
                             <div>
-                                <div className="sec-kicker">// 01 · {t('specs.kicker')}</div>
+                                <div className="sec-kicker">{'// 01 · '}{t('specs.kicker')}</div>
                                 <h2>{t('specs.title')}</h2>
                                 <div className="sec-sub">{t('specs.sub')}</div>
                             </div>
@@ -371,7 +371,7 @@ export default function LandingPage() {
                     <div className="container">
                         <div className="sec-head">
                             <div>
-                                <div className="sec-kicker">// 02 · {t('lang.kicker')}</div>
+                                <div className="sec-kicker">{'// 02 · '}{t('lang.kicker')}</div>
                                 <h2>{t('lang.title')}</h2>
                                 <div className="sec-sub">{t('lang.sub')}</div>
                             </div>
@@ -418,7 +418,7 @@ export default function LandingPage() {
                     <div className="container">
                         <div className="sec-head">
                             <div>
-                                <div className="sec-kicker">// 03 · {t('adm.kicker')}</div>
+                                <div className="sec-kicker">{'// 03 · '}{t('adm.kicker')}</div>
                                 <h2>{t('adm.title')}</h2>
                             </div>
                         </div>
@@ -458,7 +458,7 @@ export default function LandingPage() {
                     <div className="container">
                         <div className="sec-head">
                             <div>
-                                <div className="sec-kicker">// 04 · {t('campus.kicker')}</div>
+                                <div className="sec-kicker">{'// 04 · '}{t('campus.kicker')}</div>
                                 <h2>{t('campus.title')}</h2>
                                 <div className="sec-sub">{t('campus.sub')}</div>
                             </div>

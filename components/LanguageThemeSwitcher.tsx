@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from '@/i18n/routing'
 import { useLocale } from 'next-intl'
 import { useTheme } from 'next-themes'
@@ -14,6 +14,8 @@ export default function LanguageThemeSwitcher() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const languages = [
     { code: 'ru', name: t('languages.russian') },
@@ -83,7 +85,7 @@ export default function LanguageThemeSwitcher() {
                     key={themeOption.key}
                     onClick={() => switchTheme(themeOption.key)}
                     className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors flex items-center gap-2 ${
-                      theme === themeOption.key
+                      mounted && theme === themeOption.key
                         ? 'bg-accent/10 text-accent'
                         : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                     }`}

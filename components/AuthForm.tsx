@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { signIn } from '@/lib/auth'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 
 export default function AuthForm() {
     const [email, setEmail] = useState('')

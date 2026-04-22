@@ -104,6 +104,7 @@ export async function POST(request: Request) {
     for (const grade of grades) {
         if (
             typeof grade.score !== 'number' ||
+            !Number.isFinite(grade.score) ||
             grade.score < 0 ||
             grade.score > 100 ||
             typeof grade.subject !== 'string' ||

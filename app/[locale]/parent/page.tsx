@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 
 type Child = {
@@ -16,7 +16,7 @@ type Child = {
 
 const mockChild: Child = {
     id: 1,
-    name: 'Иван Иванов',
+    name: 'Асель Касымова',
     group: 'ИС-21',
     avgGrade: 82,
     attendance: 95,
@@ -35,21 +35,19 @@ const mockChild: Child = {
     ],
 }
 
-export default function ParentDashboard({ params }: { params?: { locale?: string } }) {
+export default function ParentDashboard() {
     const router = useRouter()
-    const { user, loading } = useAuth()
-    // Bug 10.8: use locale from params so logout redirects to /ru/ or /kk/ prefix
-    const locale = (params && params.locale) || 'ru'
+    const { user, role, loading } = useAuth()
     const [child] = useState<Child>(mockChild)
+    const [showAllGrades, setShowAllGrades] = useState(false)
 
     useEffect(() => {
-        if (!loading && (!user || user.user_metadata?.role !== 'parent')) {
+        if (!loading && (!user || role !== 'parent')) {
             router.push('/')
         }
-    }, [user, loading, router])
+    }, [user, role, loading, router])
 
-    if (loading || !user || user.user_metadata?.role !== 'parent') return null
-    const [showAllGrades, setShowAllGrades] = useState(false)
+    if (loading || !user || role !== 'parent') return null
 
     const getGradeColor = (score: number) => {
         if (score >= 85) return 'bg-green-100 text-green-700'
@@ -57,13 +55,8 @@ export default function ParentDashboard({ params }: { params?: { locale?: string
         return 'bg-red-100 text-red-700'
     }
 
-    // Bug 10.8: logout redirects to locale-prefixed path
     const handleLogout = () => {
-        if (locale === 'kk') {
-            router.push('/kk/auth/login')
-        } else {
-            router.push('/ru/auth/login')
-        }
+        router.push('/')
     }
 
     return (

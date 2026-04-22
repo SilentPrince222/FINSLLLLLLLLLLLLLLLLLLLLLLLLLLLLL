@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 
 type User = {
@@ -30,19 +30,19 @@ const roleLabels: Record<User['role'], { label: string; color: string }> = {
 
 export default function AdminDashboard() {
     const router = useRouter()
-    const { user, loading } = useAuth()
+    const { user, role, loading } = useAuth()
     const [users, setUsers] = useState<User[]>(mockUsers)
-
-    useEffect(() => {
-        if (!loading && (!user || user.user_metadata?.role !== 'admin')) {
-            router.push('/')
-        }
-    }, [user, loading, router])
-
-    if (loading || !user || user.user_metadata?.role !== 'admin') return null
     const [filter, setFilter] = useState<string>('all')
     const [showAddModal, setShowAddModal] = useState(false)
     const [search, setSearch] = useState('')
+
+    useEffect(() => {
+        if (!loading && (!user || role !== 'admin')) {
+            router.push('/')
+        }
+    }, [user, role, loading, router])
+
+    if (loading || !user || role !== 'admin') return null
 
     const filteredUsers = users.filter(u => {
         if (filter !== 'all' && u.role !== filter) return false

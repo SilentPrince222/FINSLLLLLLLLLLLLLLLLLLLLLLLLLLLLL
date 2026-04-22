@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { supabase } from './supabase'
 import { getProfile } from './database'
-import type { User } from '@supabase/supabase-js'
+import type { User, Session } from '@supabase/supabase-js'
 
 type Role = 'student' | 'teacher' | 'parent' | 'admin'
 
@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 async function resolveRole(userId: string): Promise<string | null> {
     try {
         const { data } = await getProfile(userId)
-        return (data as any)?.role ?? null
+        return (data as { role?: string } | null)?.role ?? null
     } catch {
         return null
     }
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // onAuthStateChange fires INITIAL_SESSION synchronously on subscribe —
         // use it as the single source of truth instead of racing it against getUser().
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: string, session: any) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
             if (!mounted) return
             const current = session?.user ?? null
             setUser(current)

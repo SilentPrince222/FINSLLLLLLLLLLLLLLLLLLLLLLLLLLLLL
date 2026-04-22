@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { signUp } from '@/lib/auth'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import LoadingSpinner from './LoadingSpinner'
 
 export default function RegisterForm() {

@@ -5,10 +5,11 @@ interface DonutChartProps {
 }
 
 export default function DonutChart({ data }: DonutChartProps) {
-  const total = data.reduce((sum, d) => sum + d.value, 0)
+  const validData = data.filter(d => Number.isFinite(d.value) && d.value >= 0)
+  const total = validData.reduce((sum, d) => sum + d.value, 0)
   let cumulative = 0
 
-  if (data.length === 0 || total === 0) {
+  if (validData.length === 0 || total === 0) {
     return (
       <div className="relative h-32 w-32 mx-auto">
         <svg viewBox="0 0 36 36" className="transform -rotate-90">
@@ -30,7 +31,7 @@ export default function DonutChart({ data }: DonutChartProps) {
   return (
     <div className="relative h-32 w-32 mx-auto">
       <svg viewBox="0 0 36 36" className="transform -rotate-90">
-        {data.map((d) => {
+        {validData.map((d) => {
           const offset = cumulative
           cumulative += (d.value / total) * 100
           return (

@@ -45,8 +45,7 @@ export async function getGrades(studentId: string) {
 // Bug 2.2: tighten type so score must be number — passing 'abc' is a compile error
 export async function createGrade(data: Database['public']['Tables']['grades']['Insert']) {
     return singleOrNull(
-        supabase
-            .from('grades')
+        (supabase.from('grades') as any)
             .insert(data)
             .select()
             .single()
@@ -55,8 +54,7 @@ export async function createGrade(data: Database['public']['Tables']['grades']['
 
 export async function updateGrade(id: number, data: Database['public']['Tables']['grades']['Update']) {
     return singleOrNull(
-        supabase
-            .from('grades')
+        (supabase.from('grades') as any)
             .update(data)
             .eq('id', id)
             .select()
@@ -83,8 +81,7 @@ export async function getTimetable(userId: string) {
 
 export async function createTimetableEntry(data: Database['public']['Tables']['timetable']['Insert']) {
     return singleOrNull(
-        supabase
-            .from('timetable')
+        (supabase.from('timetable') as any)
             .insert(data)
             .select()
             .single()
@@ -109,8 +106,7 @@ export async function getEvents(userId: string) {
 
 export async function createEvent(data: Database['public']['Tables']['events']['Insert']) {
     return singleOrNull(
-        supabase
-            .from('events')
+        (supabase.from('events') as any)
             .insert(data)
             .select()
             .single()
@@ -119,8 +115,7 @@ export async function createEvent(data: Database['public']['Tables']['events']['
 
 export async function updateEvent(id: number, data: Database['public']['Tables']['events']['Update']) {
     return singleOrNull(
-        supabase
-            .from('events')
+        (supabase.from('events') as any)
             .update(data)
             .eq('id', id)
             .select()

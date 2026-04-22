@@ -52,7 +52,7 @@ export default function TimetablePage() {
         // are saved in rapid succession
         if (data) {
             setEntries(prev =>
-                [...prev, data].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day))
+                [...prev, data as TimetableEntry].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day))
             )
             setSubject('')
             setRoom('')

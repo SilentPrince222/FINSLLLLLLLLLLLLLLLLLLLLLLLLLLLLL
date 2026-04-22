@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth, signOut } from '@/lib/auth'
-import { useParams, useRouter } from 'next/navigation'
+import { useAuth, signOut, getDashboardUrl } from '@/lib/auth'
+import { useParams } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import Navigation from '@/components/ui/Navigation'
 import { useGrades, useTimetable, useEvents } from '@/hooks'
 import {
@@ -14,7 +15,7 @@ import {
 } from '@/components/dashboard'
 
 export default function Dashboard() {
-    const { user, loading: authLoading } = useAuth()
+    const { user, role, loading: authLoading } = useAuth()
     const router = useRouter()
     const params = useParams()
     const locale = (params?.locale as string) ?? 'ru'
@@ -23,6 +24,12 @@ export default function Dashboard() {
     const { events, loading: eventsLoading } = useEvents()
 
     const [news, setNews] = useState<any[]>([])
+
+    useEffect(() => {
+        if (authLoading) return
+        if (!user) { router.push(`/${locale}/auth/login`); return }
+        if (role && role !== 'student') { router.push(`/${locale}${getDashboardUrl(role)}`); return }
+    }, [authLoading, user, role, router, locale])
 
     useEffect(() => {
         let mounted = true
@@ -71,7 +78,7 @@ export default function Dashboard() {
         { label: 'Grades', href: `/${locale}/dashboard/grades`, icon: '📚', onClick: () => router.push(`/${locale}/dashboard/grades`) },
         { label: 'Timetable', href: `/${locale}/dashboard/timetable`, icon: '📅', onClick: () => router.push(`/${locale}/dashboard/timetable`) },
         { label: 'Events', href: `/${locale}/dashboard/events`, icon: '📅', onClick: () => router.push(`/${locale}/dashboard/events`) },
-        { label: 'Sign Out', href: `/${locale}`, icon: '🚪', onClick: () => signOut().then(() => router.push(`/${locale}`)) },
+        { label: 'Sign Out', href: `/${locale}`, icon: '🚪', onClick: () => { router.push(`/${locale}`); signOut() } },
     ]
 
     return (

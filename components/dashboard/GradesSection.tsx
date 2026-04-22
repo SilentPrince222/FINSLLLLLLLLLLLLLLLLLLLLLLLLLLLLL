@@ -1,7 +1,7 @@
 import React from 'react'
 import Card from '@/components/ui/Card'
 import Button from '@/components/Button'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 
 interface Grade {
   id: number

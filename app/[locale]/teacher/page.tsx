@@ -96,7 +96,7 @@ export default function TeacherDashboard() {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Панель преподавателя</h1>
                 <button
-                    onClick={() => signOut().then(() => router.push('/auth/login'))}
+                    onClick={() => { router.push('/auth/login'); signOut() }}
                     className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
                 >
                     Выход

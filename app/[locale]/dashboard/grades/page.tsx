@@ -69,7 +69,7 @@ export default function GradesPage() {
             // Bug 4.2: functional update prevents stale closure when two
             // grades are added in rapid succession
             if (data) {
-                setGrades(prev => [data, ...prev])
+                setGrades(prev => [data as Grade, ...prev])
                 setSubject('')
                 setScore('')
             }
@@ -108,7 +108,7 @@ export default function GradesPage() {
             }).then(({ data }) => {
                 // Bug 4.2: functional update here too
                 if (data) {
-                    setGrades(prev => [data, ...prev])
+                    setGrades(prev => [data as Grade, ...prev])
                 }
             })
         }
