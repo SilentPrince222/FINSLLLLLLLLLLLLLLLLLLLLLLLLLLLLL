@@ -86,7 +86,8 @@ Base schema from `SUPABASE_SCHEMA.md` is applied as-is. Additions on top:
 ```sql
 -- Student/teacher profile enrichment
 alter table profiles add column group_name text;       -- e.g. "IT-21"
-alter table profiles add column attendance_rate int;   -- 0-100, denormalized for demo
+alter table profiles add column attendance_rate int
+  check (attendance_rate between 0 and 100);           -- 0-100, denormalized for demo
 
 -- Grade enrichment
 alter table grades add column teacher_id uuid references profiles(id);
@@ -94,6 +95,9 @@ alter table grades add column comment text;
 ```
 
 Existing RLS policies already cover these columns (they use table-level `ALL`/`SELECT`).
+
+**Fixed values used throughout the MVP:**
+- `grades.semester` is `NOT NULL` in the base schema — use `'2026-1'` as the fixed value everywhere (seed inserts, teacher-page inserts). No semester picker in UI; the demo is a single semester.
 
 ### 4.2 Realtime publication
 
@@ -125,18 +129,22 @@ alter table grades replica identity full;
 - Delete the `MOCK_USERS` array.
 - `signIn` becomes: `return supabase.auth.signInWithPassword({ email, password })`.
 - `signUp` uses the Supabase path (remove the commented-out state, un-stub it).
-- `getUserRole` reads role from `profiles.role`, not `user.user_metadata.role`. The `handle_new_user` trigger writes role to `profiles` and `user_metadata.role` can be empty after login. `AuthProvider` fetches the profile once on login and caches the role in component state.
+- **Role resolution — keep it synchronous for consumers.** After `signIn` completes, `AuthProvider` does a one-shot `supabase.from('profiles').select('role').eq('id', user.id).single()` and stores the result in a `role: string | null` field on the context state. Consumers read `useAuth().role` synchronously — existing synchronous `getUserRole(user)` call sites are rewritten to this new field. The fetch happens only in the `onAuthStateChange` handler (and on initial mount if a session exists); after that it's cached. Total added work: ~25 min, not hidden cost.
+
+**Cookie sharing (resolves route-handler auth):** The existing `lib/supabase.ts` already uses `createClientComponentClient<Database>` from `@supabase/auth-helpers-nextjs`. That helper stores the session in an httpOnly cookie that `createRouteHandlerClient` reads on the server — so the `/api/ai/analyze` route's `supabase.auth.getUser()` will see the same session after login. No client refactor needed. (The package is deprecated in favor of `@supabase/ssr`; migration is post-demo cleanup per §14.)
 
 ### 5.2 Login UX — quick-login buttons
 
-On `/auth/login`, in addition to the standard email/password form, two prominent buttons:
+The login page (`app/[locale]/auth/login/page.tsx`) currently has a `handleDemoLogin` with **three** buttons (student/teacher/admin), all using email domain `@demo.com` and password `demo123`. **This existing block is replaced**, not extended:
 
-- **"Войти как учитель"** → calls `signIn('teacher@demo.edu', 'demo12345')`.
-- **"Войти как студент"** → calls `signIn('aidar.alimov@demo.edu', 'demo12345')`.
+- Remove the `admin` demo button (admin stays pure-mock; no seeded admin user).
+- Change `demoCredentials` email domain `@demo.com` → `@demo.edu` (matches seed).
+- Change password `demo123` → `demo12345` (matches seed).
+- Final state: **two** prominent buttons:
+  - **"Войти как учитель"** → `signIn('teacher@demo.edu', 'demo12345')`.
+  - **"Войти как студент"** → `signIn('aidar.alimov@demo.edu', 'demo12345')`.
 
-Rationale: during a live demo, typing credentials under a camera wastes 15-30 seconds per login and exposes the password. One click advances the flow.
-
-Passwords are hardcoded in the login component but guarded behind `process.env.NODE_ENV === 'development'` (in production the buttons render as disabled stubs). All seeded users share the same password `demo12345` — acceptable for hackathon, **not acceptable for production**.
+Rationale: during a live demo, typing credentials under a camera wastes 15-30 seconds per login and exposes the password. One click advances the flow. Passwords are hardcoded in the login component — acceptable for hackathon, **not acceptable for production**. Since there is no production deploy in scope (§2), no `NODE_ENV` guard is added.
 
 ### 5.3 Route protection
 
@@ -204,7 +212,17 @@ return NextResponse.json(parsed)
 
 **Streaming:** Deferred. Non-streaming keeps the route simple; Gemini Flash latency (~1-2s) is acceptable with a loading spinner. If buffer time allows, a streaming variant via SSE or `ReadableStream` is a 30-minute add-on.
 
-### 6.2 Package dependency
+### 6.2 Model availability fallback
+
+`gemini-3-flash-preview` is a preview model and can be renamed or rate-gated by Google without notice. Add an env var `GEMINI_MODEL=gemini-3-flash-preview` (default) with runtime fallback to `gemini-2.5-flash` on a `404 NOT_FOUND` from Google's API. Three extra lines of code, insures against a model-name change ruining the demo:
+
+```typescript
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'
+const FALLBACK_MODEL = 'gemini-2.5-flash'
+// try MODEL; on 404 or NOT_FOUND error, retry once with FALLBACK_MODEL
+```
+
+### 6.3 Package dependency
 
 Add `@google/genai` (latest stable). Remove references to `@google/generative-ai` if any exist (deprecated).
 
@@ -214,9 +232,13 @@ Add `@google/genai` (latest stable). Remove references to `@google/generative-ai
 
 ### 7.1 Client subscription (student dashboard)
 
-In `hooks/useGrades.ts`:
+In `hooks/useGrades.ts`. The hook is currently consumed by `app/[locale]/dashboard/page.tsx` (main dashboard), so the Realtime effect lights up at that route:
 
 ```typescript
+import { toast } from 'sonner'
+import type { Database } from '@/types/database'
+type Grade = Database['public']['Tables']['grades']['Row']
+
 useEffect(() => {
   if (!user) return
   const channel = supabase
@@ -230,8 +252,9 @@ useEffect(() => {
         filter: `student_id=eq.${user.id}`,
       },
       (payload) => {
-        setGrades(prev => [payload.new, ...prev])
-        toast.show(`Жаңа баға: ${payload.new.subject} — ${payload.new.score}`)
+        const newGrade = payload.new as Grade
+        setGrades(prev => [newGrade, ...prev])
+        toast.success(`Жаңа баға: ${newGrade.subject} — ${newGrade.score}`)
       }
     )
     .subscribe()
@@ -239,26 +262,33 @@ useEffect(() => {
 }, [user])
 ```
 
+`payload.new` is typed `Record<string, any>` by Supabase; the cast to `Grade` is trusted because the RLS filter guarantees shape. No runtime validation beyond RLS — acceptable for demo scope.
+
 ### 7.2 Server-side filter
 
 The `filter: student_id=eq.<me>` pushes filtering to Postgres. Without it, every `INSERT` on `grades` broadcasts to every connected client — wasteful and exposes metadata of other students' activity even though RLS would redact the payload.
 
 ### 7.3 RLS + Realtime
 
-Supabase Realtime's `postgres_changes` respects RLS by default: students receive `INSERT` events only for rows they can `SELECT`. The existing `"Students view own grades"` policy covers this. No additional Realtime-specific policy needed.
+Supabase Realtime's `postgres_changes` respects RLS by default: events for rows a subscriber lacks `SELECT` permission on are **dropped entirely** (not delivered with a redacted payload). The existing `"Students view own grades"` policy covers this. No additional Realtime-specific policy needed.
 
 ### 7.4 Visual feedback (without redesigning UI)
 
-Using framer-motion (already in dependencies):
+Dependencies:
+
+- **framer-motion** — already in `package.json`. Used for smooth average-grade number animation.
+- **sonner** — **new dependency**. Lightweight (~20KB), ~5 min integration: add `<Toaster />` once in `app/[locale]/layout.tsx`, then `import { toast } from 'sonner'` from anywhere. Chosen over hand-rolling a toast (which would cost 20+ min and duplicate effort) and over the heavier `radix-ui/toast` (more setup). `components/Notifications.tsx` exists in the repo but is not wired into a working toast API — we do not use it.
+
+Behaviors:
 
 - New grade card pulses for ~6 seconds after arrival (CSS `animation: pulse`, 3 iterations).
-- Toast in top-right, auto-dismiss after 4 seconds.
+- Toast appears top-right, auto-dismiss after 4 seconds (sonner default).
 - Average grade number animates smoothly to new value (framer-motion `animate` on number).
 
 ### 7.5 Degradation
 
 1. **SDK auto-retry:** Supabase client retries WebSocket with exponential backoff (5 attempts).
-2. **Polling fallback:** if subscription status stays `CLOSED` for >10s, start `setInterval(refetchGrades, 3000)`. Visually ~3s delay — acceptable.
+2. **Polling fallback:** if subscription status stays `CLOSED` for >10s, start `setInterval(refetchGrades, 3000)`. Visually ~3s delay — acceptable. **When subscription status later transitions back to `SUBSCRIBED`, the interval MUST be cleared** — otherwise Realtime INSERT and polling INSERT collide and double-append to state. The hook keeps a ref to the interval ID and clears it on any `SUBSCRIBED` event.
 3. **Hard fallback:** a "Refresh" button on the dashboard for manual refetch.
 
 Fallback 2 is implemented upfront (not deferred to "if time allows"), ~20 min work, insures against the one scenario where the central demo feature could fail.
@@ -273,13 +303,13 @@ Run with `npm run seed` (or `npx tsx scripts/seed.ts`). Uses `@supabase/supabase
 
 **Behavior:**
 
-1. **Wipe:** delete all users with email domain `@demo.edu` via `supabase.auth.admin.deleteUser`. Cascades to `profiles`, `grades`, etc. Idempotent — re-running the script is safe.
+1. **Wipe:** list users via `supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })`, filter by `email.endsWith('@demo.edu')`, delete each via `auth.admin.deleteUser`. Cascades to `profiles`, `grades`, etc. Idempotent — re-running the script is safe. Pagination is explicit to avoid silent truncation if the default page size ever shrinks.
 2. **Create 2 teachers:**
    - `teacher@demo.edu` / `demo12345` → "Жанар Мұратқызы"
    - `teacher2@demo.edu` / `demo12345` → "Серік Алиұлы Қасенов"
 3. **Create 30 students** with Kazakh names across two groups `IT-21` (15) and `IT-22` (15). Each with `attendance_rate` drawn from a realistic distribution (N(90, 5), clamped to [70, 100]).
 4. **Patch profiles** with `group_name` and `attendance_rate` (the `handle_new_user` trigger creates the profile row; `UPDATE` sets the custom fields).
-5. **Generate grades:** for each student × 5 subjects (Математика, Физика, Программирование, Ағылшын тілі, История) × 3 grades = ~450 rows. Each student has an ability profile (strong/average/weak); scores are drawn from N(μ_ability, 8), clamped to [30, 100]. Dates are spread uniformly across the last 90 days. `teacher_id` is randomly assigned from the two seeded teachers.
+5. **Generate grades:** for each student × 5 subjects (Математика, Физика, Программирование, Ағылшын тілі, История) × 3 grades = ~450 rows. Each student has an ability profile (strong/average/weak); scores are drawn from N(μ_ability, 8), clamped to [30, 100]. Dates are spread uniformly across the last 90 days. `teacher_id` is randomly assigned from the two seeded teachers. `semester = '2026-1'` is the fixed value (matches §4.1).
 6. **Print summary** including demo-login credentials at the end.
 
 ### 8.2 Student names (fixed list for reproducibility)
@@ -302,16 +332,16 @@ Add `tsx` to `devDependencies` for running TypeScript scripts directly.
 | # | Step | Duration | Risk | Output |
 |---|---|---:|---|---|
 | 1 | Install `@google/genai`, update `@supabase/supabase-js`, add `tsx`; update `types/database.ts` | 20m | low | dependencies + types |
-| 2 | Apply SQL migration in Supabase SQL Editor (alter tables + enable realtime) | 20m | low | schema deployed |
+| 2 | Apply SQL migration in Supabase SQL Editor (alter tables + enable realtime); verify with `select * from pg_publication_tables where pubname='supabase_realtime';` | 20m | low | schema deployed |
 | 3 | Write and run `scripts/seed.ts` | 80m | medium | 32 users + ~450 grades |
 | 4 | Strip mock from `lib/auth.ts`; add quick-login buttons on `/auth/login` | 60m | medium | real auth works |
-| 5 | Rewrite `teacher/page.tsx` to fetch students from DB; "Add grade" → `supabase.from('grades').insert` | 120m | high | teacher CRUD persists |
-| 6 | Rewrite `/api/ai/analyze/route.ts` with `@google/genai` + `gemini-3-flash-preview` | 90m | medium | real AI analysis |
-| 7 | Add Realtime subscription in `hooks/useGrades.ts`; toast + pulse animation; polling fallback | 120m | high | live grade sync |
+| 5 | Rewrite `teacher/page.tsx` to fetch students from DB; "Add grade" → `supabase.from('grades').insert` with `semester='2026-1'`, `teacher_id=user.id` | 120m | high | teacher CRUD persists |
+| 6 | Rewrite `/api/ai/analyze/route.ts` with `@google/genai` + primary model `gemini-3-flash-preview` + fallback `gemini-2.5-flash` | 90m | medium | real AI analysis |
+| 7 | Add Realtime subscription in `hooks/useGrades.ts`; integrate sonner `<Toaster />` in layout; toast + pulse animation; polling fallback with `SUBSCRIBED`-reconnect cleanup | 150m | high | live grade sync |
 | 8 | Replace Russian names in `admin/page.tsx` mockUsers; update `CLAUDE.md` | 20m | low | Kazakh-only project |
-| 9 | Buffer: end-to-end demo rehearsal, debug, extra seed tuning | 70m | — | demo confidence |
+| 9 | Buffer: end-to-end demo rehearsal, debug, extra seed tuning | 40m | — | demo confidence |
 
-**Total: 10h 0m.** Each step is committed separately for easy rollback.
+**Total: 10h 0m.** Step 7 gets +30 min (150 instead of 120) to cover toast-library integration, the `SUBSCRIBED`-state interval-cleanup logic, and two-window live rehearsal. Buffer tightens from 70 to 40 min. Each step is committed separately for easy rollback.
 
 ---
 
@@ -334,7 +364,7 @@ Realtime + teacher persistence is the critical path — all other features can d
 
 1. Open `/auth/login` in two windows.
 2. Window 1: "Войти как учитель" → `/teacher`.
-3. Window 2: "Войти как студент" → `/dashboard` (as Айдар Алимов).
+3. Window 2: "Войти как студент" → `/dashboard` (as Айдар Алимов). `useGrades` hook is rendered by `app/[locale]/dashboard/page.tsx` — this is where toast and pulse are visible.
 4. Teacher selects Айдар Алимов → subject "Математика" → score "95" → clicks "Добавить".
 5. **~300ms pause.** Student window: toast "Жаңа баға: Математика — 95!", math card pulses, average recalculates with animation.
 6. Student clicks "AI-анализ" → ~1.5s → live Gemini response in Russian analyzing the grade pattern.
@@ -387,10 +417,12 @@ Tracked separately, **not** done today:
 
 ---
 
-## 15. Open questions
+## 15. Resolved decisions
 
-- Should the single `grade` insert also write to an `activity_log` table to show an "audit trail" card on the teacher page? Small effort (~20min); not critical, but could be a second wow element. **Default: no, unless buffer remains.**
-- The current `lib/supabase.ts` uses `@supabase/auth-helpers-nextjs`. This package is deprecated as of 2025 in favor of `@supabase/ssr`. Migration adds ~40min. **Default: keep existing package; flag as post-demo cleanup.**
+Originally open; closed for this MVP:
+
+- **`activity_log` audit trail table:** **NOT implemented.** Would be ~20 min work; unnecessary for demo; out of scope.
+- **`@supabase/auth-helpers-nextjs` → `@supabase/ssr` migration:** **NOT done today.** The helpers package still works and handles the cookie bridge we rely on (§5.1). Deferred to post-demo cleanup per §14.
 
 ---
 
