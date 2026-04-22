@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import Button from '@/components/Button'
@@ -24,6 +24,8 @@ export default function Navigation({
   collapsible = true
 }: NavigationProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  // Bug 5.17: respect prefers-reduced-motion — disable spring animation
+  const prefersReducedMotion = useReducedMotion()
 
   return (
     <motion.aside
@@ -32,7 +34,11 @@ export default function Navigation({
         className
       )}
       animate={{ width: isCollapsed ? 64 : 256 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      transition={
+        prefersReducedMotion
+          ? { duration: 0 }
+          : { type: 'spring', stiffness: 300, damping: 30 }
+      }
     >
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between">

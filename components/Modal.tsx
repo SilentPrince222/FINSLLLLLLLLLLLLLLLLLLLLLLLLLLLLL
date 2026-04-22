@@ -28,14 +28,21 @@ export default function Modal({
     loading = false,
     disabled = false,
 }: ModalProps) {
+    // Bug 5.18: use a counter so opening A then B then closing B does not
+    // restore scroll while A is still open.
     useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden'
-        } else {
-            document.body.style.overflow = 'unset'
-        }
+        if (!isOpen) return
+        const existing = parseInt(document.body.dataset.modalCount ?? '0', 10)
+        document.body.dataset.modalCount = String(existing + 1)
+        document.body.style.overflow = 'hidden'
         return () => {
-            document.body.style.overflow = 'unset'
+            const current = parseInt(document.body.dataset.modalCount ?? '1', 10)
+            const next = Math.max(0, current - 1)
+            document.body.dataset.modalCount = String(next)
+            if (next === 0) {
+                document.body.style.overflow = ''
+                delete document.body.dataset.modalCount
+            }
         }
     }, [isOpen])
 

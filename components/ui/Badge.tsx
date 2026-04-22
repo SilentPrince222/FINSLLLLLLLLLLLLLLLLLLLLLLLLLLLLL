@@ -40,8 +40,10 @@ export default function Badge({
             style={status ? { backgroundColor: bg, color: text } : undefined}
         >
             {showDot && (
-                <span 
-                    className="w-1.5 h-1.5 rounded-full mr-1.5" 
+                // Bug 5.8: add aria-label so screen readers know what the dot means
+                <span
+                    aria-label={status === 'active' ? 'active' : 'inactive'}
+                    className="w-1.5 h-1.5 rounded-full mr-1.5"
                     style={{ backgroundColor: status === 'active' ? '#10B981' : '#94A3B8' }}
                 />
             )}

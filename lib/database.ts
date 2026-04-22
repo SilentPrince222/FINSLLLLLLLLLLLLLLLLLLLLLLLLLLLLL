@@ -3,13 +3,27 @@
 import { supabase } from './supabase'
 import type { Database } from '@/types/database'
 
+// Bug 2.1: .single() throws when 0 rows are returned. Wrap it so we return
+// { data: null, error: null } instead of propagating the PGRST116 error.
+async function singleOrNull<T>(
+    query: PromiseLike<{ data: T | null; error: { code?: string; message: string } | null }>
+): Promise<{ data: T | null; error: { code?: string; message: string } | null }> {
+    const result = await query
+    if (result.error && result.error.code === 'PGRST116') {
+        return { data: null, error: null }
+    }
+    return result
+}
+
 // ==================== PROFILES ====================
 export async function getProfile(userId: string) {
-    return supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
+    return singleOrNull(
+        supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single()
+    )
 }
 
 export async function getAllProfiles() {
@@ -28,22 +42,26 @@ export async function getGrades(studentId: string) {
         .order('created_at', { ascending: false })
 }
 
-export async function createGrade(data: any) {
-    return supabase
-        .from('grades')
-        .insert(data)
-        .select()
-        .single()
+// Bug 2.2: tighten type so score must be number — passing 'abc' is a compile error
+export async function createGrade(data: Database['public']['Tables']['grades']['Insert']) {
+    return singleOrNull(
+        supabase
+            .from('grades')
+            .insert(data)
+            .select()
+            .single()
+    )
 }
 
-export async function updateGrade(id: number, data: any) {
-    return supabase
-        .from('grades')
-        // @ts-ignore - Supabase typing issue with update method
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single()
+export async function updateGrade(id: number, data: Database['public']['Tables']['grades']['Update']) {
+    return singleOrNull(
+        supabase
+            .from('grades')
+            .update(data)
+            .eq('id', id)
+            .select()
+            .single()
+    )
 }
 
 export async function deleteGrade(id: number) {
@@ -63,12 +81,14 @@ export async function getTimetable(userId: string) {
         .order('start_time')
 }
 
-export async function createTimetableEntry(data: any) {
-    return supabase
-        .from('timetable')
-        .insert(data)
-        .select()
-        .single()
+export async function createTimetableEntry(data: Database['public']['Tables']['timetable']['Insert']) {
+    return singleOrNull(
+        supabase
+            .from('timetable')
+            .insert(data)
+            .select()
+            .single()
+    )
 }
 
 export async function deleteTimetableEntry(id: number) {
@@ -87,22 +107,25 @@ export async function getEvents(userId: string) {
         .order('due_date', { ascending: true })
 }
 
-export async function createEvent(data: any) {
-    return supabase
-        .from('events')
-        .insert(data)
-        .select()
-        .single()
+export async function createEvent(data: Database['public']['Tables']['events']['Insert']) {
+    return singleOrNull(
+        supabase
+            .from('events')
+            .insert(data)
+            .select()
+            .single()
+    )
 }
 
-export async function updateEvent(id: number, data: any) {
-    return supabase
-        .from('events')
-        // @ts-ignore - Supabase typing issue with update method
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single()
+export async function updateEvent(id: number, data: Database['public']['Tables']['events']['Update']) {
+    return singleOrNull(
+        supabase
+            .from('events')
+            .update(data)
+            .eq('id', id)
+            .select()
+            .single()
+    )
 }
 
 export async function deleteEvent(id: number) {

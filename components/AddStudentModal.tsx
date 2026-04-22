@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import Button from './Button'
 import Modal from './Modal'
 
 interface AddStudentModalProps {
     isOpen: boolean
     onClose: () => void
-    onSubmit: (data: StudentFormData) => Promise<void>
+    onSubmit: (_data: StudentFormData) => Promise<void>
 }
 
 export type StudentFormData = {

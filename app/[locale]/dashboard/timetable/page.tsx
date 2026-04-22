@@ -48,8 +48,12 @@ export default function TimetablePage() {
             room: room || null
         })
 
+        // Bug 4.4: functional update to avoid stale closure when two entries
+        // are saved in rapid succession
         if (data) {
-            setEntries([...entries, data].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day)))
+            setEntries(prev =>
+                [...prev, data].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day))
+            )
             setSubject('')
             setRoom('')
         }

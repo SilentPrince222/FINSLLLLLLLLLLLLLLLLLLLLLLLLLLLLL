@@ -27,10 +27,12 @@ export default function ConsultationPage() {
   const router = useRouter()
 
   const handleBooking = async (consultationId: string) => {
+    setSelectedConsultation(consultationId)
     setBooking(true)
     // Simulate booking API call
     setTimeout(() => {
       setBooking(false)
+      setSelectedConsultation(null)
       alert('Консультация успешно забронирована! Вы получите подтверждение по email.')
       router.back()
     }, 1500)

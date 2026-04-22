@@ -1,33 +1,34 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
-const roles = [
-    { role: 'student', label: 'Student', icon: '◔', desc: 'Grades, schedule, materials', href: '/ru/dashboard' },
-    { role: 'teacher', label: 'Teacher', icon: '◈', desc: 'Manage students', href: '/ru/teacher' },
-    { role: 'parent', label: 'Parent', icon: '◯', desc: 'Child progress', href: '/ru/parent' },
-    { role: 'admin', label: 'Admin', icon: '▤', desc: 'System control', href: '/ru/admin' },
-]
-
-export default function Home() {
+export default function Home({ params }: { params?: { locale?: string } }) {
     const router = useRouter()
+    const pathname = usePathname()
     const { user, loading, getDashboardUrl } = useAuth()
 
-    const locale = 'ru'
+    // Bug 10.4: read locale from params, not hardcoded 'ru'
+    const locale = (params && params.locale) ? params.locale : (pathname.split('/')[1] || 'ru')
+
     useEffect(() => {
         if (!loading) {
             if (user) {
-                router.push(`/${locale}${getDashboardUrl()}`)
+                // Bug 10.5: use replace so there is no extra history entry and
+                // the redirect fires in the same microtask after loading resolves
+                router.replace(`/${locale}${getDashboardUrl()}`)
             } else {
-                router.push(`/${locale}/auth/login`)
+                router.replace(`/${locale}/auth/login`)
             }
         }
-    }, [user, loading, router, getDashboardUrl])
+    }, [user, loading, router, getDashboardUrl, locale])
 
-    // Show loading while checking auth state
+    // Render nothing while loading — show spinner only during the auth check
+    // so there is no flash of content if the redirect fires immediately
+    if (!loading && !user) return null
+
     return (
         <div className="min-h-screen flex items-center justify-center">
             <LoadingSpinner size="lg" />

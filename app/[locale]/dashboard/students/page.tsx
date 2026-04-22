@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Button, Card, CardHeader, CardTitle, Badge, Input, Select, StatCard, Modal } from '@/components/ui'
-import { getGradeColor, getStatusColor } from '@/lib/design-system'
+import { Button, Card, Badge, Input, Select, StatCard, Modal } from '@/components/ui'
+import { getGradeColor } from '@/lib/design-system'
 
 type Student = {
     id: number

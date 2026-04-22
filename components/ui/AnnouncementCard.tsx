@@ -15,8 +15,16 @@ export default function AnnouncementCard({ title, date, priority = 'medium', cla
   }
 
   return (
-    <div className={`p-3 rounded-lg bg-muted/30 border-l-4 ${priorityColors[priority]} ${className}`}>
-      <h4 className="text-sm font-medium text-foreground">{title}</h4>
+    // Bug 5.13: priority is conveyed by color only — add a visible text label
+    // and an aria-label on the container so screen readers get the priority
+    <div
+      aria-label={`${priority} priority announcement`}
+      className={`p-3 rounded-lg bg-muted/30 border-l-4 ${priorityColors[priority]} ${className}`}
+    >
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-foreground">{title}</h4>
+        <span className="text-xs font-medium capitalize text-muted-foreground">{priority}</span>
+      </div>
       <p className="text-xs text-muted-foreground mt-1">{date}</p>
     </div>
   )

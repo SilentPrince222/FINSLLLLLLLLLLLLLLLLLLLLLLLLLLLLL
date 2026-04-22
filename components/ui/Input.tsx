@@ -7,17 +7,24 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
     error?: string
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, className = '', ...props }, ref) => {
+export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, className = '', id, ...props }, ref) => {
+    // Bug 5.10: generate a stable id so aria-describedby matches the error element
+    const inputId = id ?? (props.name ? `input-${props.name}` : undefined)
+    const errorId = inputId ? `${inputId}-error` : undefined
+
     return (
         <div className="w-full">
             {label && (
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label htmlFor={inputId} className="block text-sm font-medium text-foreground mb-1">
                     {label}
                     {props.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
             )}
             <input
                 ref={ref}
+                id={inputId}
+                aria-describedby={error && errorId ? errorId : undefined}
+                aria-invalid={error ? true : undefined}
                 className={`
                     w-full px-3 py-2 bg-background border border-border rounded-lg
                     text-sm text-foreground placeholder:text-muted-foreground
@@ -29,7 +36,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, c
                 `}
                 {...props}
             />
-            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+            {error && <p id={errorId} className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
     )
 })

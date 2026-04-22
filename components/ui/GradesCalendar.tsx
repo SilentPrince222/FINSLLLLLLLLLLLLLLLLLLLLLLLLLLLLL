@@ -11,7 +11,7 @@ interface Lesson {
 }
 
 interface CalendarProps {
-  onAddLesson: (lesson: Omit<Lesson, 'id'>) => void
+  onAddLesson: (_lesson: Omit<Lesson, 'id'>) => void
   lessons: Lesson[]
 }
 
@@ -24,6 +24,7 @@ export default function GradesCalendar({ onAddLesson, lessons }: CalendarProps) 
     time: '',
     grade: ''
   })
+  const [validationError, setValidationError] = useState('')
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
                    'July', 'August', 'September', 'October', 'November', 'December']
@@ -56,17 +57,31 @@ export default function GradesCalendar({ onAddLesson, lessons }: CalendarProps) 
   }
 
   const handleAddLesson = () => {
-    if (formData.subject && formData.time && formData.grade && selectedDate) {
-      onAddLesson({
-        subject: formData.subject,
-        time: formData.time,
-        grade: parseInt(formData.grade),
-        date: selectedDate
-      })
-      setFormData({ subject: '', time: '', grade: '' })
-      setShowAddModal(false)
-      setSelectedDate(null)
+    setValidationError('')
+    // Bug 5.15: validate subject is not empty/whitespace
+    if (!formData.subject.trim()) {
+      setValidationError('Subject name is required')
+      return
     }
+    // Bug 5.16: validate grade is within 0-100 in JS, not just HTML attr
+    if (!formData.time || !formData.grade || !selectedDate) {
+      setValidationError('All fields are required')
+      return
+    }
+    const score = parseInt(formData.grade)
+    if (isNaN(score) || score < 0 || score > 100) {
+      setValidationError('Grade must be between 0 and 100')
+      return
+    }
+    onAddLesson({
+      subject: formData.subject.trim(),
+      time: formData.time,
+      grade: score,
+      date: selectedDate
+    })
+    setFormData({ subject: '', time: '', grade: '' })
+    setShowAddModal(false)
+    setSelectedDate(null)
   }
 
   const changeMonth = (direction: 'prev' | 'next') => {
@@ -182,6 +197,10 @@ export default function GradesCalendar({ onAddLesson, lessons }: CalendarProps) 
               </div>
             </div>
 
+            {validationError && (
+              <p role="alert" className="text-sm text-red-600 mt-2">{validationError}</p>
+            )}
+
             <div className="flex gap-3 mt-6">
               <Button
                 variant="secondary"
@@ -189,6 +208,7 @@ export default function GradesCalendar({ onAddLesson, lessons }: CalendarProps) 
                   setShowAddModal(false)
                   setFormData({ subject: '', time: '', grade: '' })
                   setSelectedDate(null)
+                  setValidationError('')
                 }}
                 className="flex-1"
               >

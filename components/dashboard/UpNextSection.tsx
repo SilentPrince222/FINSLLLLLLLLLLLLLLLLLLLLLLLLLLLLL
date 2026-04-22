@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useTranslations } from 'next-intl'
 import Card from '@/components/ui/Card'
 
@@ -12,36 +12,35 @@ interface TimetableEntry {
 }
 
 interface UpNextSectionProps {
-  timetable: TimetableEntry[]
+  timetable: TimetableEntry[] | null
 }
 
 export default function UpNextSection({ timetable }: UpNextSectionProps) {
   const t = useTranslations('dashboard')
-  // Get current day and time
-  const now = new Date()
+  // Bug 6.16: memoize now so it is computed once, not on every render
+  const now = useMemo(() => new Date(), [])
   // Получаем день недели (например, "monday")
   const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
   const currentTime = now.toTimeString().slice(0, 5) // HH:MM format
 
-  // Convert day names to match database (assuming English)
-  const dayMapping: { [key: string]: string } = {
-    'monday': 'Monday',
-    'tuesday': 'Tuesday',
-    'wednesday': 'Wednesday',
-    'thursday': 'Thursday',
-    'friday': 'Friday',
-    'saturday': 'Saturday',
-    'sunday': 'Sunday'
-  }
+  const safeTimetable = timetable ?? []
 
-  const todayClasses = timetable.filter(entry =>
+  const todayClasses = safeTimetable.filter(entry =>
     entry.day.toLowerCase() === currentDay
   )
 
   // Find next class today
+  // Bug 6.5: handle midnight-crossing — a class with start_time like "00:30" is actually
+  // after "23:45" because it occurs after midnight.  String comparison fails here:
+  // "00:30" < "23:45" even though the class is in the future.
+  // Heuristic: if currentTime >= "20:00" and start_time <= "06:00", treat the class as
+  // upcoming (it starts after midnight, so it is still in the future).
+  const isLateNight = currentTime >= '20:00'
+
   let nextClass = null
   for (const classEntry of todayClasses) {
-    if (classEntry.start_time > currentTime) {
+    const afterMidnight = isLateNight && classEntry.start_time <= '06:00'
+    if (classEntry.start_time > currentTime || afterMidnight) {
       nextClass = classEntry
       break
     }
@@ -49,12 +48,11 @@ export default function UpNextSection({ timetable }: UpNextSectionProps) {
 
   // If no more classes today, show first class tomorrow
   if (!nextClass) {
-    const tomorrowIndex = (now.getDay() % 7) + 1
     const tomorrow = new Date(now)
     tomorrow.setDate(now.getDate() + 1)
     const tomorrowDay = tomorrow.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
 
-    const tomorrowClasses = timetable.filter(entry =>
+    const tomorrowClasses = safeTimetable.filter(entry =>
       entry.day.toLowerCase() === tomorrowDay
     ).sort((a, b) => a.start_time.localeCompare(b.start_time))
 

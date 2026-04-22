@@ -11,11 +11,12 @@ interface TimetableEntry {
 }
 
 interface TimetableSectionProps {
-  timetable: TimetableEntry[]
+  timetable: TimetableEntry[] | null
 }
 
 export default function TimetableSection({ timetable }: TimetableSectionProps) {
   const router = useRouter()
+  const safeTimetable = timetable ?? []
 
   return (
     <div className="col-span-12 md:col-span-3">
@@ -30,7 +31,7 @@ export default function TimetableSection({ timetable }: TimetableSectionProps) {
           </div>
         </div>
         <div className="space-y-3">
-          {timetable.slice(0, 3).map(t => (
+          {safeTimetable.slice(0, 3).map(t => (
             <div key={t.id} className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
               <span className="text-sm font-medium text-foreground">{t.subject}</span>
               <span className="text-sm text-muted-foreground font-mono">{t.start_time}</span>

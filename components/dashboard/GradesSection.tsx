@@ -10,11 +10,12 @@ interface Grade {
 }
 
 interface GradesSectionProps {
-  grades: Grade[]
+  grades: Grade[] | null
 }
 
 export default function GradesSection({ grades }: GradesSectionProps) {
   const router = useRouter()
+  const safeGrades = grades ?? []
 
   return (
     <div className="col-span-12 md:col-span-4">
@@ -29,7 +30,7 @@ export default function GradesSection({ grades }: GradesSectionProps) {
           </div>
         </div>
         <div className="space-y-3">
-          {grades.slice(0, 3).map(g => (
+          {safeGrades.slice(0, 3).map(g => (
             <div key={g.id} className="flex justify-between items-center p-2 rounded-lg bg-muted/50">
               <span className="text-sm font-medium text-foreground">{g.subject}</span>
               <span className={`text-sm font-bold ${g.score >= 70 ? 'text-success' : 'text-danger'}`}>

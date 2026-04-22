@@ -12,21 +12,32 @@ interface Event {
 }
 
 interface DeadlinesSectionProps {
-  events?: Event[]
+  events?: Event[] | null
 }
 
-export default function DeadlinesSection({ events = [] }: DeadlinesSectionProps) {
+export default function DeadlinesSection({ events }: DeadlinesSectionProps) {
+  const safeEvents = events ?? []
   const t = useTranslations('dashboard')
   // Filter events that are deadlines (exams, homework)
   const deadlineTypes = ['exam', 'homework']
-  const deadlines = events.filter(event => deadlineTypes.includes(event.type))
+  const deadlines = safeEvents.filter(event => deadlineTypes.includes(event.type))
+
+  // Bug 6.2: bare date strings like "2026-04-22" are parsed as midnight UTC by
+  // the spec, but some engines treat them as local midnight, causing the wrong
+  // calendar day. Force UTC by appending a time zone when there is no time part.
+  const parseDeadlineDate = (dateStr: string): Date => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return new Date(`${dateStr}T00:00:00Z`)
+    }
+    return new Date(dateStr)
+  }
 
   const upcomingDeadlines = deadlines.filter(d => {
-    const dueDate = new Date(d.due_date)
+    const dueDate = parseDeadlineDate(d.due_date)
     const now = new Date()
     const diffHours = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60)
     return diffHours > 0 && diffHours <= 48
-  }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+  }).sort((a, b) => parseDeadlineDate(a.due_date).getTime() - parseDeadlineDate(b.due_date).getTime())
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -38,7 +49,7 @@ export default function DeadlinesSection({ events = [] }: DeadlinesSectionProps)
   }
 
   const formatTimeRemaining = (dueDate: string) => {
-    const due = new Date(dueDate)
+    const due = parseDeadlineDate(dueDate)
     const now = new Date()
     const diffMs = due.getTime() - now.getTime()
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))

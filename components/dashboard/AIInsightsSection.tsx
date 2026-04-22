@@ -8,12 +8,13 @@ interface Grade {
 }
 
 interface AIInsightsSectionProps {
-  grades: Grade[]
+  grades: Grade[] | null
 }
 
 export default function AIInsightsSection({ grades }: AIInsightsSectionProps) {
-  const average = grades.length > 0 ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length) : 0
-  const trend = grades.length > 1 ? '📈 Stable Performance' : '📊 Add more data'
+  const safeGrades = grades ?? []
+  const average = safeGrades.length > 0 ? Math.round(safeGrades.reduce((sum, g) => sum + g.score, 0) / safeGrades.length) : 0
+  const trend = safeGrades.length > 1 ? '📈 Stable Performance' : '📊 Add more data'
 
   return (
     <div className="col-span-12 md:col-span-5">

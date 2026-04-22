@@ -2,30 +2,32 @@ import React, { useState } from 'react'
 import Modal from '@/components/Modal'
 import Button from '@/components/Button'
 
+// Bug 2.6: onCreate must receive due_date (matching the DB column), not date
 interface CreateEventModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (event: { title: string; date: string; description: string }) => void
+  onCreate: (_event: { title: string; due_date: string; description: string }) => void
 }
 
 export default function CreateEventModal({ isOpen, onClose, onCreate }: CreateEventModalProps) {
+  // Bug 2.6: store as due_date so onCreate receives the correct field name
   const [formData, setFormData] = useState({
     title: '',
-    date: '',
+    due_date: '',
     description: ''
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (formData.title && formData.date && formData.description) {
-      onCreate(formData)
-      setFormData({ title: '', date: '', description: '' })
+    if (formData.title && formData.due_date && formData.description) {
+      onCreate({ title: formData.title, due_date: formData.due_date, description: formData.description })
+      setFormData({ title: '', due_date: '', description: '' })
       onClose()
     }
   }
 
   const handleClose = () => {
-    setFormData({ title: '', date: '', description: '' })
+    setFormData({ title: '', due_date: '', description: '' })
     onClose()
   }
 
@@ -56,8 +58,8 @@ export default function CreateEventModal({ isOpen, onClose, onCreate }: CreateEv
           </label>
           <input
             type="datetime-local"
-            value={formData.date}
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+            value={formData.due_date}
+            onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
             className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
             required
           />

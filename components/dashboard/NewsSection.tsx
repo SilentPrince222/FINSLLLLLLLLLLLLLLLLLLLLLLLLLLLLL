@@ -11,15 +11,16 @@ interface NewsItem {
 }
 
 interface NewsSectionProps {
-  news: NewsItem[]
+  news: NewsItem[] | null
 }
 
 export default function NewsSection({ news }: NewsSectionProps) {
+  const safeNews = news ?? []
   return (
     <div className="mt-8">
       <h2 className="text-2xl font-bold text-heading mb-6">Main News</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {news.map(item => (
+        {safeNews.map(item => (
           <Card key={item.id} variant="elevated" hover className="overflow-hidden">
             <div className="aspect-video bg-muted rounded-lg mb-4 flex items-center justify-center">
               <span className="text-4xl text-muted-foreground">📰</span>

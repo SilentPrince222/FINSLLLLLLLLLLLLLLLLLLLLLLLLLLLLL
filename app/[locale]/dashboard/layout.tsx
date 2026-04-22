@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Link, usePathname } from '@/i18n/routing'
 import { useTranslations } from 'next-intl'
 import Notifications from '@/components/Notifications'
@@ -9,7 +10,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const pathname = usePathname()
     const t = useTranslations('navigation')
 
-    const navItems = [
+    // Bug 4.6: memoize navItems so every render doesn't produce a new array
+    // reference — prevents downstream components re-rendering unnecessarily
+    const navItems = useMemo(() => [
         { href: '/dashboard', label: t('home'), icon: '🏠' },
         { href: '/dashboard/grades', label: t('grades'), icon: '📊' },
         { href: '/dashboard/timetable', label: t('timetable'), icon: '📅' },
@@ -17,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { href: '/dashboard/materials', label: t('materials'), icon: '📚' },
         { href: '/dashboard/analytics', label: t('analytics'), icon: '📈' },
         { href: '/dashboard/profile', label: t('profile'), icon: '👤' },
-    ]
+    ], [t])
 
     return (
         <div className="min-h-screen bg-background dark:bg-background-dark">

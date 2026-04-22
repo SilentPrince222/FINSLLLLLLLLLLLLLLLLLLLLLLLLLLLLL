@@ -10,10 +10,11 @@ interface Announcement {
 }
 
 interface AnnouncementsSectionProps {
-  announcements: Announcement[]
+  announcements: Announcement[] | null
 }
 
 export default function AnnouncementsSection({ announcements }: AnnouncementsSectionProps) {
+  const safeAnnouncements = announcements ?? []
   return (
     <Card variant="glass" className="lg:col-span-1">
       <div className="flex items-center gap-3 mb-4">
@@ -23,7 +24,7 @@ export default function AnnouncementsSection({ announcements }: AnnouncementsSec
         <h3 className="text-lg font-semibold text-foreground">Announcements</h3>
       </div>
       <div className="space-y-3">
-        {announcements.map(ann => (
+        {safeAnnouncements.map(ann => (
           <AnnouncementCard
             key={ann.id}
             title={ann.title}

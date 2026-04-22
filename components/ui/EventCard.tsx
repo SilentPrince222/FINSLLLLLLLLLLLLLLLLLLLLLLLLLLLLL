@@ -15,8 +15,8 @@ interface Event {
 
 interface EventCardProps {
   event: Event
-  onLike?: (id: number) => void
-  onComment?: (id: number) => void
+  onLike?: (_id: number) => void
+  onComment?: (_id: number) => void
 }
 
 export default function EventCard({ event, onLike, onComment }: EventCardProps) {

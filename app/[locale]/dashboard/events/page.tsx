@@ -25,18 +25,7 @@ const mockEvents: Event[] = [
     { id: 6, title: 'Study Group: Physics Chapter 8', date: '2026-04-22', time: '18:00', description: 'Need help with quantum mechanics? Join our study session in the library.', type: 'social', author: 'Alex Chen', likes: 15, comments: 7 },
 ]
 
-// Event type colors for consistency
-const typeColors: Record<Event['type'], string> = {
-    exam: 'bg-red-100 text-red-700 border-red-300',
-    homework: 'bg-yellow-100 text-yellow-700 border-yellow-300',
-    activity: 'bg-blue-100 text-blue-700 border-blue-300',
-    holiday: 'bg-green-100 text-green-700 border-green-300',
-    social: 'bg-purple-100 text-purple-700 border-purple-300',
-}
-
 export default function EventsPage() {
-    const [currentDate] = useState(new Date())
-    const [selectedDate, setSelectedDate] = useState<string | null>(null)
     const [events, setEvents] = useState<Event[]>(mockEvents)
     const [showCreateModal, setShowCreateModal] = useState(false)
 

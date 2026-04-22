@@ -1,8 +1,8 @@
 # EduTok Backend MVP — Design Spec
 
 **Date:** 2026-04-22
-**Status:** Draft — pending spec review
-**Timeline:** 1 day (~10 working hours)
+**Status:** Reviewed 2026-04-22 — 9 review fixes (§16.2) + bugfix integration (§16.3); timeline open (§9.2); **VERIFIED** markers in §5.1, §6.1, §6.2
+**Timeline:** 10h 30m tracked (down from 11h 25m after 2026-04-22 bugfix saved 55m) — extension-vs-scope-cut decision open (§9.2)
 **Scope:** Backend-only (UI design out of scope; minimal UI wiring to consume real data)
 
 ---
@@ -84,20 +84,51 @@ Base schema from `SUPABASE_SCHEMA.md` is applied as-is. Additions on top:
 ### 4.1 Column additions
 
 ```sql
--- Student/teacher profile enrichment
-alter table profiles add column group_name text;       -- e.g. "IT-21"
-alter table profiles add column attendance_rate int
-  check (attendance_rate between 0 and 100);           -- 0-100, denormalized for demo
+-- Student/teacher profile enrichment (idempotent — safe to re-run)
+alter table profiles add column if not exists group_name text;         -- e.g. "IT-21"
+alter table profiles add column if not exists attendance_rate int
+  check (attendance_rate between 0 and 100);                            -- 0-100, denormalized for demo
 
--- Grade enrichment
-alter table grades add column teacher_id uuid references profiles(id);
-alter table grades add column comment text;
+-- Grade enrichment (idempotent)
+alter table grades add column if not exists teacher_id uuid references profiles(id);
+alter table grades add column if not exists comment text;
+
+-- Pin the demo to a single semester at the DB layer. See §4.1b.
+alter table grades drop constraint if exists grades_semester_fixed;
+alter table grades add constraint grades_semester_fixed check (semester = '2026-1');
 ```
 
-Existing RLS policies already cover these columns (they use table-level `ALL`/`SELECT`).
+`IF NOT EXISTS` keeps the migration idempotent — re-running during debugging won't fail with "column already exists". The `drop constraint if exists … add constraint` pattern does the same for the CHECK.
 
-**Fixed values used throughout the MVP:**
-- `grades.semester` is `NOT NULL` in the base schema — use `'2026-1'` as the fixed value everywhere (seed inserts, teacher-page inserts). No semester picker in UI; the demo is a single semester.
+**Deferred `NOT NULL`.** `teacher_id` on `grades`, and `group_name` on student `profiles`, are **nullable at migration time** so seed can backfill them without ordering gymnastics. The seed script applies `NOT NULL` / partial CHECK at the end of its run (§8.1 step 6) once all rows have values. Teacher-page inserts then always provide `teacher_id` because of the RLS policy in §4.1a.
+
+### 4.1a RLS — teacher attribution on grade insert
+
+The base schema has a permissive INSERT policy on `grades`: any authenticated user with `role = 'teacher'` can insert any row, including rows where `teacher_id` points at a colleague. Replace it before the teacher page goes live:
+
+```sql
+drop policy if exists "Teachers can insert grades" on grades;
+create policy "Teachers insert grades they authored"
+  on grades for insert
+  with check (
+    auth.uid() = teacher_id
+    and exists (select 1 from profiles where id = auth.uid() and role = 'teacher')
+  );
+```
+
+`with check` validates every row being inserted — the two clauses together enforce "teacher_id must equal the caller *and* the caller must be a teacher." Seed bypasses this via `SUPABASE_SERVICE_ROLE_KEY` (§8.1), so it is unaffected.
+
+### 4.1b Fixed semester constant
+
+**Single source of truth:** `lib/constants.ts` exports
+
+```typescript
+export const SEMESTER = '2026-1' as const
+```
+
+> **File doesn't exist yet** — create it in §9 step 1 **before** any import of it (seed script, teacher page). Otherwise tsc fails with `Cannot find module '@/lib/constants'`.
+
+Seed inserts, teacher-page inserts, and any query that scopes by semester import this constant — no string literals. The CHECK constraint in §4.1 enforces the invariant at the DB layer. Changing the demo semester later is a one-line edit plus a constraint update.
 
 ### 4.2 Realtime publication
 
@@ -115,7 +146,23 @@ alter table grades replica identity full;
 
 ### 4.4 TypeScript types
 
-`types/database.ts` is updated to include the two new columns on `profiles` and `grades`. Client code referencing these is strictly typed; any teacher/student UI accessing `group_name` or `attendance_rate` relies on the updated types.
+> **Bugfix 2026-04-22 affects this step.** `tsconfig.json` now has `strictNullChecks: true`. `types/database.ts` currently has **no** `group_name`, `attendance_rate`, `teacher_id`, or `comment` columns. Adding them is the **first** code change in §9 step 1 — nothing downstream compiles without it.
+
+Add to `types/database.ts` on both `profiles` and `grades` (all three variants — `Row`, `Insert`, `Update`):
+
+```typescript
+// profiles
+Row:    { …existing…, group_name: string | null, attendance_rate: number | null }
+Insert: { …existing…, group_name?: string | null, attendance_rate?: number | null }
+Update: { …existing…, group_name?: string | null, attendance_rate?: number | null }
+
+// grades
+Row:    { …existing…, teacher_id: string | null, comment: string | null }
+Insert: { …existing…, teacher_id?: string | null, comment?: string | null }
+Update: { …existing…, teacher_id?: string | null, comment?: string | null }
+```
+
+Nullability at the type layer stays because many reads (during seed, right after `handle_new_user` fires) happen before backfill. The partial CHECK + `NOT NULL` from §8.1 step 6 tighten this at the DB layer after all rows have values. Client code should null-guard on read.
 
 ---
 
@@ -129,9 +176,12 @@ alter table grades replica identity full;
 - Delete the `MOCK_USERS` array.
 - `signIn` becomes: `return supabase.auth.signInWithPassword({ email, password })`.
 - `signUp` uses the Supabase path (remove the commented-out state, un-stub it).
-- **Role resolution — keep it synchronous for consumers.** After `signIn` completes, `AuthProvider` does a one-shot `supabase.from('profiles').select('role').eq('id', user.id).single()` and stores the result in a `role: string | null` field on the context state. Consumers read `useAuth().role` synchronously — existing synchronous `getUserRole(user)` call sites are rewritten to this new field. The fetch happens only in the `onAuthStateChange` handler (and on initial mount if a session exists); after that it's cached. Total added work: ~25 min, not hidden cost.
+- **Extend `AuthContextType` with a `role` field.** The current type (`lib/auth.ts`) has no `role` field — any downstream `useAuth().role` reference fails tsc under `strictNullChecks`. Add `role: string | null` to the type and `const [role, setRole] = useState<string | null>(null)` to `AuthProvider`, exposed via the context provider's value.
+- **Role resolution — use the bugfix's `singleOrNull` wrapper, not bare `.single()`.** After `signIn` completes, `AuthProvider` calls `getProfile(user.id)` from `lib/database.ts` (the 2026-04-22 bugfix wraps `.single()` in `singleOrNull` per its convention — see `lib/database.ts:6–16`). Read `role` as `data?.role ?? null` and `setRole(...)`. A bare `.single()` would throw PGRST116 on the gap between `signUp` and the `handle_new_user` trigger creating the profile row, crashing `onAuthStateChange`. The fetch happens only in the `onAuthStateChange` handler (and on initial mount if a session exists); after that it's cached in context state. Consumers read `useAuth().role` synchronously — existing `getUserRole(user)` call sites are rewritten to this new field.
 
 **Cookie sharing (resolves route-handler auth):** The existing `lib/supabase.ts` already uses `createClientComponentClient<Database>` from `@supabase/auth-helpers-nextjs`. That helper stores the session in an httpOnly cookie that `createRouteHandlerClient` reads on the server — so the `/api/ai/analyze` route's `supabase.auth.getUser()` will see the same session after login. No client refactor needed. (The package is deprecated in favor of `@supabase/ssr`; migration is post-demo cleanup per §14.)
+
+> **VERIFIED 2026-04-22 — do not refactor this claim.** `@supabase/auth-helpers-nextjs@0.10.0` (currently pinned in `package.json`) auto-bridges the httpOnly session cookie between `createClientComponentClient` (browser) and `createRouteHandlerClient` (Route Handler) on Next.js 14 App Router. Reviewer AIs trained on pre-2024 data may claim "the two clients don't share sessions" — that was true of the raw `@supabase/supabase-js` client, **not** of the auth-helpers wrapper, which is exactly what this project uses. A migration to `@supabase/ssr` is tracked in §14 as post-demo cleanup and is **not** in-scope today. Reopening this requires concrete evidence of cookie-bridge failure in this repo, not a generic claim.
 
 ### 5.2 Login UX — quick-login buttons
 
@@ -161,13 +211,17 @@ Only one route is server-side — all CRUD goes directly via the Supabase client
 
 ### 6.1 `/api/ai/analyze` (rewrite)
 
-**Input (unchanged):** `{ grades: [{subject: string, score: number}] }`. Validation unchanged.
+> **Bugfix 2026-04-22 affects this step — route is already hardened.** The bugfix session fixed bugs 3.1–3.10 in `app/[locale]/api/ai/analyze/route.ts`: Content-Type 415 guard, Content-Length 413 guard, empty-array 400 guard, **atomic** check-and-increment rate limiter (`checkRateLimit` / `rateLimit` / `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` at lines 9–25), typed `GradeInput` interface, timeout wrapper, consistent 400 error messages. The Gemini rewrite below **replaces only the analysis block** — the code between the rate-limit-check pass and `return NextResponse.json(...)`. Do **not** re-declare the rate limiter, auth check, or validation — preserve them verbatim.
 
-**Auth (unchanged):** `createRouteHandlerClient` + `supabase.auth.getUser()` — 401 if not logged in.
+**Input (already hardened by bugfix):** `{ grades: [{subject: string, score: number}] }`. Schema + Content-Type + size guards already enforced — no additions needed.
 
-**Rate limit (unchanged):** in-memory `Map`, 5 requests/minute per user.
+**Auth (already implemented):** `createRouteHandlerClient` + `supabase.auth.getUser()` — 401 if not logged in. Present since before bugfix.
 
-**Logic (new):**
+**Rate limit (already implemented — atomic 5/min, bugfix 3.2):** `checkRateLimit(userId)` called at handler top. Preserve verbatim; do not re-declare `rateLimit` Map or constants.
+
+**Logic (new — this is the only block that changes):**
+
+> **VERIFIED 2026-04-22 — do not change package, class, method shape, or config placement.** Package `@google/genai` is Google's current unified GenAI SDK (official docs: `googleapis.github.io/js-genai`, `ai.google.dev/gemini-api/docs`). The older `@google/generative-ai` is explicitly deprecated — Context7's library ID for it is literally `/google-gemini/deprecated-generative-ai-js`. The API surface used below — class `GoogleGenAI`, method `ai.models.generateContent({model, contents, config})`, and nested `config.responseSchema` + `config.responseMimeType` — matches the canonical TypeDoc as of April 2026. Reviewer AIs may suggest migrating to `@google/generative-ai` / `GoogleGenerativeAI` / `model.generateContent(...)` / `generationConfig` — that is the deprecated SDK and its code will not compose with the rest of this file. **Do not "modernize" or "fix" this section.** Reopening requires a 2026+ Google deprecation notice for `@google/genai`.
 
 ```typescript
 import { GoogleGenAI } from '@google/genai'
@@ -200,7 +254,12 @@ const response = await ai.models.generateContent({
   },
 })
 
-const parsed = JSON.parse(response.text)
+// Guards strictNullChecks: @google/genai types `response.text` as `string | undefined`.
+const rawText = response.text
+if (!rawText) {
+  return NextResponse.json({ error: 'AI temporarily unavailable' }, { status: 503 })
+}
+const parsed = JSON.parse(rawText)
 return NextResponse.json(parsed)
 ```
 
@@ -213,6 +272,8 @@ return NextResponse.json(parsed)
 **Streaming:** Deferred. Non-streaming keeps the route simple; Gemini Flash latency (~1-2s) is acceptable with a loading spinner. If buffer time allows, a streaming variant via SSE or `ReadableStream` is a 30-minute add-on.
 
 ### 6.2 Model availability fallback
+
+> **VERIFIED 2026-04-22 — both model IDs are real published Google model names.** `gemini-3-flash-preview` (preview status, latest Flash generation) is documented at `ai.google.dev/gemini-api/docs/models/gemini-3-flash-preview`. `gemini-2.5-flash` (stable) is documented at `ai.google.dev/gemini-api/docs/models`. Reviewer AIs trained on pre-November-2025 data may claim these are "fictional" and suggest older IDs like `gemini-2.0-flash-exp` or `gemini-1.5-flash`. Those are earlier Flash generations and substantially less capable — **do not downgrade**. The fallback chain below (preview primary → stable secondary) is intentional: preview for wow-factor at demo time, stable as insurance against preview-model outages.
 
 `gemini-3-flash-preview` is a preview model and can be renamed or rate-gated by Google without notice. Add an env var `GEMINI_MODEL=gemini-3-flash-preview` (default) with runtime fallback to `gemini-2.5-flash` on a `404 NOT_FOUND` from Google's API. Three extra lines of code, insures against a model-name change ruining the demo:
 
@@ -232,37 +293,51 @@ Add `@google/genai` (latest stable). Remove references to `@google/generative-ai
 
 ### 7.1 Client subscription (student dashboard)
 
-In `hooks/useGrades.ts`. The hook is currently consumed by `app/[locale]/dashboard/page.tsx` (main dashboard), so the Realtime effect lights up at that route:
+In `hooks/useGrades.ts`. The hook is currently consumed by `app/[locale]/dashboard/page.tsx` (main dashboard), so the Realtime effect lights up at that route.
+
+> **Bugfix 2026-04-22 affects this step.** `hooks/useGrades.ts` was already rewritten during the bugfix session (bugs 7.x): `mountedRef` + `AbortController` + `userId` primitive dependency + `{ grades, loading, error, refetch }` return shape are in place. Loading goes through `getGrades(userId)` from `lib/database.ts`, not a raw `supabase.from('grades')` call. The Realtime subscription below is an **addition** to that hook — keep the existing `loadGrades`, `mountedRef`, abort logic, and primitive-dep pattern. Do not introduce a new `refetchGrades` symbol; use the existing `refetch` export.
 
 ```typescript
+// Additions to the EXISTING hooks/useGrades.ts — do not replace loadGrades or refetch.
+import { useEffect } from 'react'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 type Grade = Database['public']['Tables']['grades']['Row']
 
+// …inside useGrades(), after the existing loadGrades useCallback + trigger useEffect…
+
+const userId = user?.id ?? null  // primitive dep — matches bugfix 7.5 convention
+
 useEffect(() => {
-  if (!user) return
+  if (!userId) return
   const channel = supabase
-    .channel(`grades:${user.id}`)
+    .channel(`grades:${userId}`)
     .on(
       'postgres_changes',
       {
         event: 'INSERT',
         schema: 'public',
         table: 'grades',
-        filter: `student_id=eq.${user.id}`,
+        filter: `student_id=eq.${userId}`,
       },
       (payload) => {
+        if (!mountedRef.current) return          // bugfix 7.x pattern
         const newGrade = payload.new as Grade
-        setGrades(prev => [newGrade, ...prev])
+        // Dedup by id — polling tick or gap-close refetch may have already appended.
+        setGrades(prev => prev.some(g => g.id === newGrade.id) ? prev : [newGrade, ...prev])
         toast.success(`Жаңа баға: ${newGrade.subject} — ${newGrade.score}`)
       }
     )
     .subscribe()
   return () => { supabase.removeChannel(channel) }
-}, [user])
+}, [userId])
+
+// Polling fallback (§7.5) and dashboard "Refresh" button call the existing `refetch` directly —
+// no new useCallback or ref needed; `refetch` is stable across renders given its [userId] dep.
 ```
 
-`payload.new` is typed `Record<string, any>` by Supabase; the cast to `Grade` is trusted because the RLS filter guarantees shape. No runtime validation beyond RLS — acceptable for demo scope.
+`payload.new` is typed `Record<string, any>` by Supabase; the cast to `Grade` is trusted because the RLS filter guarantees shape. No runtime validation beyond RLS — acceptable for demo scope. `userId` as a primitive dep (per bugfix 7.5) prevents re-subscription on every render where `user` is a new object reference.
 
 ### 7.2 Server-side filter
 
@@ -288,8 +363,8 @@ Behaviors:
 ### 7.5 Degradation
 
 1. **SDK auto-retry:** Supabase client retries WebSocket with exponential backoff (5 attempts).
-2. **Polling fallback:** if subscription status stays `CLOSED` for >10s, start `setInterval(refetchGrades, 3000)`. Visually ~3s delay — acceptable. **When subscription status later transitions back to `SUBSCRIBED`, the interval MUST be cleared** — otherwise Realtime INSERT and polling INSERT collide and double-append to state. The hook keeps a ref to the interval ID and clears it on any `SUBSCRIBED` event.
-3. **Hard fallback:** a "Refresh" button on the dashboard for manual refetch.
+2. **Polling fallback:** if subscription status stays `CLOSED` for >10s, start `setInterval(() => { refetch() }, 3000)` where `refetch` is the existing hook return (bugfix 2026-04-22) that delegates to `loadGrades → getGrades(userId)`. Visually ~3s delay — acceptable. On a later `SUBSCRIBED` state-change the hook does **three** things **in this order**: (a) `clearInterval` first to stop the polling loop, (b) call `refetch()` once to **close the gap window** (rows inserted between the last poll tick and the first Realtime delivery would otherwise be lost), (c) let ongoing Realtime INSERTs flow. The dedup guard in §7.1 (`prev.some(g => g.id === newGrade.id)`) prevents the gap-close refetch from double-appending rows that Realtime is about to deliver independently.
+3. **Hard fallback:** a "Refresh" button on the dashboard — calls the existing `refetch` export directly.
 
 Fallback 2 is implemented upfront (not deferred to "if time allows"), ~20 min work, insures against the one scenario where the central demo feature could fail.
 
@@ -303,14 +378,47 @@ Run with `npm run seed` (or `npx tsx scripts/seed.ts`). Uses `@supabase/supabase
 
 **Behavior:**
 
-1. **Wipe:** list users via `supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })`, filter by `email.endsWith('@demo.edu')`, delete each via `auth.admin.deleteUser`. Cascades to `profiles`, `grades`, etc. Idempotent — re-running the script is safe. Pagination is explicit to avoid silent truncation if the default page size ever shrinks.
+1. **Wipe — paginate through *all* pages of demo users.** A single call to `listUsers({ page: 1, perPage: 1000 })` only reads the first page; if prior seed runs ever accumulated >1000 demo users, a one-page wipe would leak leftovers and create duplicates on the next `createUser`. Loop until a page returns fewer than 1000 rows:
+   ```typescript
+   let page = 1
+   const demoUsers: User[] = []
+   while (true) {
+     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+     if (error) throw error
+     demoUsers.push(...data.users.filter(u => u.email?.endsWith('@demo.edu')))
+     if (data.users.length < 1000) break
+     page++
+   }
+   for (const u of demoUsers) await supabase.auth.admin.deleteUser(u.id)
+   ```
+   Cascades to `profiles`, `grades`, etc. Idempotent — re-running the script is safe.
 2. **Create 2 teachers:**
    - `teacher@demo.edu` / `demo12345` → "Жанар Мұратқызы"
    - `teacher2@demo.edu` / `demo12345` → "Серік Алиұлы Қасенов"
-3. **Create 30 students** with Kazakh names across two groups `IT-21` (15) and `IT-22` (15). Each with `attendance_rate` drawn from a realistic distribution (N(90, 5), clamped to [70, 100]).
-4. **Patch profiles** with `group_name` and `attendance_rate` (the `handle_new_user` trigger creates the profile row; `UPDATE` sets the custom fields).
-5. **Generate grades:** for each student × 5 subjects (Математика, Физика, Программирование, Ағылшын тілі, История) × 3 grades = ~450 rows. Each student has an ability profile (strong/average/weak); scores are drawn from N(μ_ability, 8), clamped to [30, 100]. Dates are spread uniformly across the last 90 days. `teacher_id` is randomly assigned from the two seeded teachers. `semester = '2026-1'` is the fixed value (matches §4.1).
-6. **Print summary** including demo-login credentials at the end.
+3. **Create 30 students** with Kazakh names across two groups `IT-21` (15) and `IT-22` (15). Each with `attendance_rate` drawn from `clamp(normalSample(90, 5), 70, 100)` — see the Box-Muller helper in §8.3a.
+4. **Patch profiles with `waitForProfile` guard.** The `handle_new_user` trigger creates the `profiles` row asynchronously — running `UPDATE` immediately after `auth.admin.createUser` races the trigger and silently updates zero rows. The script implements a bounded poll before every UPDATE:
+   ```typescript
+   async function waitForProfile(id: string, timeoutMs = 2000): Promise<void> {
+     const deadline = Date.now() + timeoutMs
+     while (Date.now() < deadline) {
+       const { data } = await supabase.from('profiles').select('id').eq('id', id).maybeSingle()
+       if (data) return
+       await new Promise(r => setTimeout(r, 100))
+     }
+     throw new Error(`handle_new_user did not create profile for ${id} within ${timeoutMs}ms`)
+   }
+   ```
+   In practice the trigger completes in <50ms; the poll is defence against latency spikes. After `waitForProfile`, `UPDATE profiles SET group_name=…, attendance_rate=…, role=…` runs and actually touches the row.
+5. **Generate grades:** for each student × 5 subjects (Математика, Физика, Программирование, Ағылшын тілі, История) × 3 grades = ~450 rows. Each student has an ability profile (strong/average/weak); scores are `clamp(normalSample(mu_ability, 8), 30, 100)`. Dates are spread uniformly across the last 90 days. `teacher_id` is randomly assigned from the two seeded teachers. `semester` is the `SEMESTER` constant from `lib/constants.ts` (matches §4.1b).
+6. **Tighten constraints post-backfill.** All rows now have values, so what was deferred in §4.1 becomes safe:
+   ```sql
+   alter table grades alter column teacher_id set not null;
+   alter table profiles drop constraint if exists group_name_required_for_students;
+   alter table profiles add constraint group_name_required_for_students
+     check (role <> 'student' or group_name is not null);
+   ```
+   `group_name` stays nullable on `profiles` overall (teachers don't have one) but becomes required for students via the partial CHECK. Teachers inserting grades in later code will fail fast if they forget `teacher_id`.
+7. **Print summary** including demo-login credentials at the end.
 
 ### 8.2 Student names (fixed list for reproducibility)
 
@@ -321,27 +429,81 @@ Run with `npm run seed` (or `npx tsx scripts/seed.ts`). Uses `@supabase/supabase
 
 `auth.admin.createUser` is the officially supported path to create authenticated users. Direct inserts into `auth.users` are undocumented and can break on Supabase upgrades. The trade-off — TypeScript + `@supabase/supabase-js` — is worth the safety.
 
+### 8.3a Normal-distribution sampling (Box-Muller)
+
+`Math.random()` is uniform. The seed uses `N(μ, σ)` for attendance and grades — implemented as a 6-line Box-Muller helper in `scripts/seed.ts`, **no new dependency**:
+
+```typescript
+// Standard Box-Muller transform: two uniform samples → one sample from N(0, 1),
+// then scaled to N(mu, sigma). Good enough for seed data — not cryptographic.
+function normalSample(mu: number, sigma: number): number {
+  const u1 = Math.random() || 1e-9  // guard against log(0)
+  const u2 = Math.random()
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2)
+  return mu + sigma * z
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v))
+}
+
+// Usage:
+//   clamp(normalSample(90, 5), 70, 100)        // attendance_rate
+//   clamp(normalSample(mu_ability, 8), 30, 100) // grade.score
+```
+
+Rejected alternative: the `simple-statistics` npm package (≈30KB, transitive deps, one more thing to audit) — overkill for two call sites. Inline wins.
+
 ### 8.4 Dependencies
 
 Add `tsx` to `devDependencies` for running TypeScript scripts directly.
 
 ---
 
-## 9. Timeline (10h)
+## 9. Timeline (revised 10h 30m — see §9.2 for open question)
 
 | # | Step | Duration | Risk | Output |
 |---|---|---:|---|---|
-| 1 | Install `@google/genai`, update `@supabase/supabase-js`, add `tsx`; update `types/database.ts` | 20m | low | dependencies + types |
-| 2 | Apply SQL migration in Supabase SQL Editor (alter tables + enable realtime); verify with `select * from pg_publication_tables where pubname='supabase_realtime';` | 20m | low | schema deployed |
-| 3 | Write and run `scripts/seed.ts` | 80m | medium | 32 users + ~450 grades |
-| 4 | Strip mock from `lib/auth.ts`; add quick-login buttons on `/auth/login` | 60m | medium | real auth works |
-| 5 | Rewrite `teacher/page.tsx` to fetch students from DB; "Add grade" → `supabase.from('grades').insert` with `semester='2026-1'`, `teacher_id=user.id` | 120m | high | teacher CRUD persists |
-| 6 | Rewrite `/api/ai/analyze/route.ts` with `@google/genai` + primary model `gemini-3-flash-preview` + fallback `gemini-2.5-flash` | 90m | medium | real AI analysis |
-| 7 | Add Realtime subscription in `hooks/useGrades.ts`; integrate sonner `<Toaster />` in layout; toast + pulse animation; polling fallback with `SUBSCRIBED`-reconnect cleanup | 150m | high | live grade sync |
+| 1 | Install `@google/genai`, update `@supabase/supabase-js`, add `tsx` (vitest + @testing-library already present from 2026-04-22 bugfix — skip those); create `lib/constants.ts` (`SEMESTER`); **first** update `types/database.ts` with new columns (§4.4) — nothing downstream compiles without it | 30m | low | dependencies + types + constants |
+| 2 | Apply SQL migration in Supabase SQL Editor (`IF NOT EXISTS` column adds + semester CHECK + RLS replace for teacher attribution + enable realtime); verify with `select * from pg_publication_tables where pubname='supabase_realtime';` | 40m | low | schema + RLS deployed |
+| 3 | Write and run `scripts/seed.ts` (paginated wipe, `waitForProfile`, Box-Muller, post-backfill NOT NULL + CHECK) | 115m | medium | 32 users + ~450 grades |
+| 4 | Strip mock from `lib/auth.ts`; extend `AuthContextType` with `role: string \| null`; add quick-login buttons on `/auth/login`; role resolution via `getProfile()` (bugfix's `singleOrNull` wrapper, not `.single()`) | 60m | medium | real auth works |
+| 5 | Rewrite `teacher/page.tsx` to fetch students from DB; "Add grade" → `supabase.from('grades').insert` with `semester=SEMESTER` (constant from §4.1b), `teacher_id=user.id` | 120m | high | teacher CRUD persists |
+| 6 | Replace analysis block in `/api/ai/analyze/route.ts` with `@google/genai` (primary `gemini-3-flash-preview`, fallback `gemini-2.5-flash`) — **preserve** existing rate-limit/auth/validation from bugfix; add `response.text` null guard | 70m | medium | real AI analysis |
+| 7 | Add Realtime subscription to existing `hooks/useGrades.ts` (bugfix 7.x already has `mountedRef`/`AbortController`/`userId` primitive dep/`refetch` export — build on top, do not replace); dedup-by-id; integrate sonner `<Toaster />` in layout; toast + pulse animation; polling fallback with ordered `SUBSCRIBED` cleanup (clearInterval → gap-close `refetch()` → resume Realtime) | 135m | high | live grade sync |
 | 8 | Replace Russian names in `admin/page.tsx` mockUsers; update `CLAUDE.md` | 20m | low | Kazakh-only project |
 | 9 | Buffer: end-to-end demo rehearsal, debug, extra seed tuning | 40m | — | demo confidence |
 
-**Total: 10h 0m.** Step 7 gets +30 min (150 instead of 120) to cover toast-library integration, the `SUBSCRIBED`-state interval-cleanup logic, and two-window live rehearsal. Buffer tightens from 70 to 40 min. Each step is committed separately for easy rollback.
+**Revised total: 10h 30m** (was 11h 25m after §16 review fixes; reduced by 55m after the 2026-04-22 bugfix session handed back work — see §9.1a). Steps 6 and 7 shrink because the bugfix already finished parts of them: route hardening (Content-Type / size / rate-limit / validation guards) removes ~20m from step 6; `mountedRef` + `AbortController` + `userId` primitive dep + `refetch` export remove ~40m from step 7. Step 1 gains +5m for the explicit `types/database.ts` column additions called out as its first action. Each step is still committed separately for easy rollback.
+
+### 9.1 Review-fix load (per-step breakdown)
+
+Tracks the work added by the §16 review fixes — consolidated here so a reader can diff against the pre-review 10h budget:
+
+| Fix | Minutes | Folded into step |
+|---|---:|---|
+| #4 Box-Muller `normalSample` helper | +5m | 3 |
+| #6 `IF NOT EXISTS` on ALTER TABLE | +0m | 2 (free with rewrite) |
+| #7 RLS `with check (teacher_id = auth.uid() …)` | +15m | 2 |
+| #8 `waitForProfile` poll before UPDATE | +15m | 3 |
+| #9 Multi-page `listUsers` loop on wipe | +10m | 3 |
+| #10 `refetchGrades` exposed from `useGrades` | +10m | 7 |
+| #11 Dedup by id + gap-close refetch on resubscribe | +15m | 7 |
+| #12 NOT NULL + partial CHECK after backfill | +5m | 3 |
+| #13 `SEMESTER` constant + DB CHECK constraint | +10m | 1, 2 |
+| **Subtotal folded into timeline** | **+85m** | — |
+
+### 9.2 Timeline realism — open for user decision
+
+Review agents projected **~18h realistic** execution for this spec, vs the 10h budget it was authored against. The 85m of §9.1 fixes consume the original buffer and push the tracked total to **11h 25m** — still below 18h, because the agents' estimates included general pessimism (unfamiliar SDK, debugging Realtime, etc.) that the VERIFIED-marked sections and concrete-code-in-spec approach partially defuse.
+
+The remaining gap (11h 25m tracked → ~14–16h pragmatic) is **not resolved here**. Options:
+
+- **A — Extend to 2 calendar days.** Commit to two 8h blocks. Cleanest; costs a calendar day.
+- **B — Drop Gemini (§6).** Saves ~90m + removes one integration risk class. Keeps Realtime + teacher persistence — the two load-bearing demo moments. Loses one "wow" factor.
+- **C — Cut seed from 30 students to 10.** Saves ~30m on step 3. Accept a late night. Thinnest cut; demo still looks populated.
+
+User must pick before step 1 begins. Until then, step estimates are accurate but the **total is not load-bearing**.
 
 ---
 
@@ -423,6 +585,44 @@ Originally open; closed for this MVP:
 
 - **`activity_log` audit trail table:** **NOT implemented.** Would be ~20 min work; unnecessary for demo; out of scope.
 - **`@supabase/auth-helpers-nextjs` → `@supabase/ssr` migration:** **NOT done today.** The helpers package still works and handles the cookie bridge we rely on (§5.1). Deferred to post-demo cleanup per §14.
+
+---
+
+## 16. Review findings — resolved/rejected
+
+Multi-agent design review on **2026-04-22** raised 13 issues plus a timeline concern. This section exists so that future reviewers — human or AI — don't reopen closed questions. A reviewer who suggests a change that appears as "REJECTED" below should either (a) read the rationale and drop the suggestion, or (b) bring new evidence **post-dating the verification date** to reopen it.
+
+### 16.1 Rejected (reviewer knowledge predates 2026 Google/Supabase releases)
+
+All five rejections were independently verified by fetching current official docs (`ai.google.dev/gemini-api/docs/models`, `googleapis.github.io/js-genai`, Supabase auth-helpers README) on the review date. Root cause for every rejection: reviewer training corpus predates the Gemini 3 release (Nov 2025+) and the `@google/genai` SDK rename.
+
+| # | Reviewer claim | Verified reality | Source |
+|---|---|---|---|
+| 1 | `@google/genai` doesn't exist — use `@google/generative-ai` | `@google/genai` is the current unified SDK. `@google/generative-ai` is officially deprecated; Context7 even files it under `/google-gemini/deprecated-generative-ai-js` | `googleapis.github.io/js-genai`, `ai.google.dev/gemini-api/docs` |
+| 1 | Class is `GoogleGenerativeAI`, method `model.generateContent(...)` | Class is `GoogleGenAI`; method is `ai.models.generateContent({ model, contents, config })` | js-genai TypeDoc |
+| 2 | `createClientComponentClient` and `createRouteHandlerClient` don't share sessions | They do — via the httpOnly cookie set by `@supabase/auth-helpers-nextjs@0.10` (already pinned in `package.json`) | auth-helpers-nextjs README + §5.1 VERIFIED block |
+| 3 | `gemini-3-flash-preview` and `gemini-2.5-flash` are fictional; real names are `gemini-2.0-flash-exp` / `gemini-1.5-flash` | Both model IDs are published on Google's model list as of April 2026. `gemini-3-flash-preview` = preview, `gemini-2.5-flash` = stable. The ones the reviewer suggested are earlier generations — using them would be a downgrade | `ai.google.dev/gemini-api/docs/models/gemini-3-flash-preview` |
+| 5 | `config.responseSchema` not accepted; need `generationConfig` | `GenerateContentConfig` (the type of `config:` in `ai.models.generateContent`) accepts `responseSchema` and `responseMimeType` directly, per TypeDoc | js-genai `GenerateContentConfig` interface |
+
+Reopening any row requires a 2026+ source (deprecation notice, changelog entry, release note) post-dating 2026-04-22. A reviewer quoting pre-2026 blog posts or training-data snapshots is not sufficient evidence.
+
+### 16.2 Accepted — folded into the spec
+
+| # | Fix | Section | Rationale |
+|---|---|---|---|
+| 4 | Box-Muller `normalSample` helper for N(μ, σ) | §8.3a | JS/tsx have no built-in normal distribution; inline helper beats a new npm dep for two call sites |
+| 6 | `IF NOT EXISTS` on every `ALTER TABLE ... ADD COLUMN` | §4.1 | Idempotent migration — re-running during debugging doesn't fail |
+| 7 | Explicit RLS `with check (auth.uid() = teacher_id …)` on grade INSERT | §4.1a | Previously any teacher could attribute grades to a colleague |
+| 8 | `waitForProfile` bounded poll before seed UPDATE | §8.1 step 4 | Guards against `handle_new_user` trigger lag — without it UPDATE silently touches 0 rows on latency spikes |
+| 9 | Multi-page `listUsers` loop on wipe | §8.1 step 1 | Single page misses users >1000, causing duplicate-email failures on re-seed |
+| 10 | `refetchGrades` defined in `useGrades` + exported from hook return | §7.1 | Previously referenced but never defined; polling fallback would throw `ReferenceError` |
+| 11 | Dedup by `id` in Realtime handler + ordered `SUBSCRIBED` cleanup (clearInterval → gap-close refetch → resume) | §7.1, §7.5 | Prevents double-append when polling and Realtime overlap; closes the gap window between last poll and first Realtime delivery |
+| 12 | `NOT NULL` on `grades.teacher_id` + partial CHECK `role <> 'student' or group_name is not null` — applied after seed backfill | §4.1, §8.1 step 6 | Previously both columns could silently be NULL in application inserts |
+| 13 | `SEMESTER` constant in `lib/constants.ts` + DB CHECK `semester = '2026-1'` | §4.1, §4.1b | Replaces string-literal `'2026-1'` scattered across seed + teacher page; pins the demo semester at the DB layer |
+
+### 16.3 Timeline concern — open (see §9.2)
+
+Reviewer estimated real execution at ~18h vs spec's 10h. The 9 accepted fixes add **+85 min tracked** (pushing the total to 11h 25m); the residual gap to 18h is debatable but real. §9.2 enumerates three resolution options (extend to 2 days, drop Gemini, cut seed size) and flags the decision as blocking on user input before step 1 begins.
 
 ---
 

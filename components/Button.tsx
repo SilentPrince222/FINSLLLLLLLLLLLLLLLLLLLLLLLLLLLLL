@@ -3,10 +3,17 @@ import { ButtonHTMLAttributes, ReactNode } from 'react'
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'text'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+// Bug 5.9: when the button contains only an icon (no visible text) an
+// aria-label MUST be supplied so screen readers can announce the action.
+// We model this as a discriminated union: either children is present or
+// aria-label is required.
+type AccessibleButtonProps =
+    | { children: ReactNode; 'aria-label'?: string }
+    | { children?: ReactNode; 'aria-label': string }
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & AccessibleButtonProps & {
     variant?: ButtonVariant
     size?: ButtonSize
-    children: ReactNode
     loading?: boolean
 }
 
@@ -51,7 +58,7 @@ export default function Button({
     disabled,
     className = '',
     ...props
-}: ButtonProps) {
+}: ButtonProps & { children?: ReactNode }) {
     return (
         <button
             disabled={disabled || loading}

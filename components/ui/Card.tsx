@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ReactNode } from 'react'
+import { HTMLAttributes, ReactNode } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +29,8 @@ const cardVariants = cva(
 )
 
 interface CardProps
-  extends VariantProps<typeof cardVariants> {
+  extends VariantProps<typeof cardVariants>,
+    Omit<HTMLAttributes<HTMLDivElement>, 'className'> {
   children: ReactNode
   className?: string
   hover?: boolean

@@ -1,10 +1,12 @@
 import React from 'react'
 import { useTranslations } from 'next-intl'
+import { useRouter } from '@/i18n/routing'
 import Card from '@/components/ui/Card'
 import Button from '@/components/Button'
 
 export default function StudentQuickLinksSection() {
   const t = useTranslations('dashboard')
+  const router = useRouter()
   const actions = [
     { label: t('scanQR'), action: 'scan-qr', description: t('scanAttendance') },
     { label: t('consultation'), action: 'consultation', description: t('bookConsultation') },
@@ -15,15 +17,15 @@ export default function StudentQuickLinksSection() {
     switch (action) {
       case 'scan-qr':
         // Navigate to QR scanner page
-        window.location.href = '/dashboard/qr'
+        router.push('/dashboard/qr')
         break
       case 'consultation':
         // Navigate to consultation booking
-        window.location.href = '/dashboard/consultation'
+        router.push('/dashboard/consultation')
         break
       case 'curator':
         // Open chat or contact form
-        window.location.href = '/dashboard/curator'
+        router.push('/dashboard/curator')
         break
       default:
         break

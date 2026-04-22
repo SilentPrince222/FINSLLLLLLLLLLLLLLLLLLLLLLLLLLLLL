@@ -20,6 +20,7 @@ export default function GradesPage() {
     const { user } = useAuth()
     const [grades, setGrades] = useState<Grade[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [lessons, setLessons] = useState<Lesson[]>([
         { id: 1, subject: 'Mathematics', time: '09:00', grade: 85, date: '2026-04-15' },
         { id: 2, subject: 'Physics', time: '11:00', grade: 78, date: '2026-04-16' },
@@ -35,9 +36,16 @@ export default function GradesPage() {
     const loadGrades = useCallback(async () => {
         if (!user) return
         setLoading(true)
-        const { data } = await getGrades(user.id)
-        if (data) setGrades(data)
-        setLoading(false)
+        setError(null)
+        try {
+            const { data, error: dbError } = await getGrades(user.id)
+            if (dbError) throw dbError
+            if (data) setGrades(data)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load grades')
+        } finally {
+            setLoading(false)
+        }
     }, [user])
 
     useEffect(() => {
@@ -49,26 +57,38 @@ export default function GradesPage() {
     async function handleAddGrade(e: React.FormEvent) {
         e.preventDefault()
         setSaving(true)
-
-        const { data } = await createGrade({
-            student_id: user!.id,
-            subject,
-            score: parseInt(score),
-            semester
-        })
-
-        if (data) {
-            setGrades([data, ...grades])
-            setSubject('')
-            setScore('')
+        const previousGrades = grades
+        try {
+            const { data, error: createError } = await createGrade({
+                student_id: user!.id,
+                subject,
+                score: parseInt(score),
+                semester
+            })
+            if (createError) throw createError
+            // Bug 4.2: functional update prevents stale closure when two
+            // grades are added in rapid succession
+            if (data) {
+                setGrades(prev => [data, ...prev])
+                setSubject('')
+                setScore('')
+            }
+        } catch (_err) {
+            setGrades(previousGrades)
+        } finally {
+            setSaving(false)
         }
-
-        setSaving(false)
     }
 
     async function handleDeleteGrade(id: number) {
-        await deleteGrade(id)
+        const previousGrades = grades
         setGrades(grades.filter(g => g.id !== id))
+        try {
+            const { error: deleteError } = await deleteGrade(id)
+            if (deleteError) throw deleteError
+        } catch (_err) {
+            setGrades(previousGrades)
+        }
     }
 
     function handleAddLesson(lessonData: Omit<Lesson, 'id'>) {
@@ -86,8 +106,9 @@ export default function GradesPage() {
                 score: lessonData.grade,
                 semester: 'Current Semester'
             }).then(({ data }) => {
+                // Bug 4.2: functional update here too
                 if (data) {
-                    setGrades([data, ...grades])
+                    setGrades(prev => [data, ...prev])
                 }
             })
         }
@@ -202,7 +223,13 @@ export default function GradesPage() {
                 {/* Grades List */}
                 {loading ? (
                     <div className="text-center py-16 text-muted-foreground">Loading...</div>
-                ) : grades.length === 0 ? (
+                ) : error ? (
+                    <div className="card p-16 text-center">
+                        <div className="text-danger">
+                            <p className="font-medium text-lg">{error}</p>
+                        </div>
+                    </div>
+                ) : (grades ?? []).length === 0 ? (
                     <div className="card p-16 text-center">
                         <div className="text-muted-foreground">
                             <p className="font-medium text-lg">No grades yet</p>
@@ -212,7 +239,7 @@ export default function GradesPage() {
                 ) : (
                     <div className="card overflow-hidden">
                         <div className="divide-y divide-border">
-                            {grades.map((grade) => (
+                            {(grades ?? []).map((grade) => (
                                 <div key={grade.id} className="p-6 flex items-center justify-between gap-6 hover:bg-muted/30 transition-colors duration-200">
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium text-foreground truncate">{grade.subject}</p>

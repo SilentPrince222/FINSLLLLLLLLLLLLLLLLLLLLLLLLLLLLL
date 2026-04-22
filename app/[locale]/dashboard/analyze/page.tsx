@@ -23,9 +23,15 @@ export default function AnalyzePage() {
     const loadGrades = useCallback(async () => {
         if (!user) return
         setLoading(true)
-        const { data } = await getGrades(user.id)
-        if (data) setGrades(data)
-        setLoading(false)
+        try {
+            const { data, error: dbError } = await getGrades(user.id)
+            if (dbError) throw dbError
+            if (data) setGrades(data)
+        } catch (err) {
+            setResult({ average: 0, level: 'Error', weakSubjects: [], strongSubjects: [], recommendations: [err instanceof Error ? err.message : 'Failed to load grades'] })
+        } finally {
+            setLoading(false)
+        }
     }, [user])
 
     // Process grades for GPA trend chart
@@ -124,7 +130,7 @@ export default function AnalyzePage() {
                                 <XAxis dataKey="period" />
                                 <YAxis domain={[0, 100]} />
                                 <Tooltip
-                                    formatter={(value, name) => [`${value}%`, 'GPA']}
+                                    formatter={(value, _name) => [`${value}%`, 'GPA']}
                                     labelFormatter={(label, payload) => {
                                         if (payload && payload[0]) {
                                             return `${payload[0].payload.subject} - ${label}`

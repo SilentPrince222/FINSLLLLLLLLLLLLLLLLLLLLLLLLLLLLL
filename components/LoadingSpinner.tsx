@@ -11,8 +11,10 @@ export default function LoadingSpinner({ size = 'md', className = '' }: LoadingS
     }
 
     return (
-        <div className={`flex items-center justify-center ${className}`}>
+        // Bug 5.19: add role="status" so screen readers announce "Loading"
+        <div role="status" aria-label="Loading" className={`flex items-center justify-center ${className}`}>
             <div className={`${sizes[size]} rounded-full border-slate-200 border-t-indigo-600 animate-spin`} />
+            <span className="sr-only">Loading...</span>
         </div>
     )
 }

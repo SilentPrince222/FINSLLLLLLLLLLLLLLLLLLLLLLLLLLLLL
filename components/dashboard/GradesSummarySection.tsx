@@ -10,20 +10,19 @@ interface Grade {
 }
 
 interface GradesSummarySectionProps {
-  grades: Grade[]
+  grades: Grade[] | null
 }
 
 export default function GradesSummarySection({ grades }: GradesSummarySectionProps) {
   const t = useTranslations('dashboard')
-  // Calculate GPA (average score)
-  const gpa = grades.length > 0
-    ? Math.round(grades.reduce((sum, grade) => sum + grade.score, 0) / grades.length)
+  const safeGrades = grades ?? []
+  const gpa = safeGrades.length > 0
+    ? Math.round(safeGrades.reduce((sum, grade) => sum + grade.score, 0) / safeGrades.length)
     : 0
 
-  // Calculate weekly progress (grades added in last 7 days)
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
-  const weeklyGrades = grades.filter(grade => grade.created_at && new Date(grade.created_at) > weekAgo)
+  const weeklyGrades = safeGrades.filter(grade => grade.created_at && new Date(grade.created_at) > weekAgo)
 
   const getGpaColor = (score: number) => {
     if (score >= 90) return 'text-success'
@@ -53,7 +52,7 @@ export default function GradesSummarySection({ grades }: GradesSummarySectionPro
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">{t('totalGrades')}</p>
-                <p className="text-lg font-semibold">{grades.length}</p>
+                <p className="text-lg font-semibold">{safeGrades.length}</p>
               </div>
             </div>
           </div>

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth, signOut } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
-import { useTranslations } from 'next-intl'
 import Navigation from '@/components/ui/Navigation'
 import { useGrades, useTimetable, useEvents } from '@/hooks'
 import {
@@ -22,8 +21,6 @@ export default function Dashboard() {
     const { events, loading: eventsLoading } = useEvents()
 
     const [news, setNews] = useState<any[]>([])
-    const [announcements, setAnnouncements] = useState<any[]>([])
-    const [achievements, setAchievements] = useState<any>({})
 
     // Mock data for now - replace with actual API calls later
     useEffect(() => {
@@ -50,17 +47,7 @@ export default function Dashboard() {
                 image: '/images/news/conference.jpg'
             }
         ])
-        setAnnouncements([
-            { id: 1, title: 'Mid-term exams start next week', date: '2026-04-20', priority: 'high' },
-            { id: 2, title: 'Library extended hours during exams', date: '2026-04-18', priority: 'medium' },
-            { id: 3, title: 'Career fair on April 25th', date: '2026-04-16', priority: 'low' }
-        ])
-        setAchievements({
-            students: 2500,
-            faculty: 150,
-            publications: 450,
-            awards: 75
-        })
+        return () => {}
     }, [])
 
     if (authLoading || gradesLoading || timetableLoading || eventsLoading) {
@@ -74,8 +61,6 @@ export default function Dashboard() {
             </div>
         )
     }
-
-    const role = user.user_metadata?.role || 'student'
 
     const locale = 'ru'
     const navItems = [

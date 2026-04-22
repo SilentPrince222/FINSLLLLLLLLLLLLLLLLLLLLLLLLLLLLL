@@ -133,6 +133,18 @@ create policy "Teachers manage events" on events
 
 ---
 
+## 🗂️ Performance Indexes
+
+```sql
+-- Bug 2.7: indexes on user_id/student_id columns for fast lookups
+create index idx_grades_student_id on grades (student_id);
+create index idx_timetable_user_id on timetable (user_id);
+create index idx_events_user_id on events (user_id);
+create index idx_events_due_date on events (due_date asc);
+```
+
+---
+
 ## ⚡ CRUD Utility Functions
 
 ```sql

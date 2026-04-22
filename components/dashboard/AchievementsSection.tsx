@@ -9,10 +9,11 @@ interface Achievements {
 }
 
 interface AchievementsSectionProps {
-  achievements: Achievements
+  achievements: Achievements | null
 }
 
 export default function AchievementsSection({ achievements }: AchievementsSectionProps) {
+  const a = achievements ?? { students: 0, faculty: 0, publications: 0, awards: 0 }
   return (
     <Card variant="elevated" className="lg:col-span-1">
       <div className="flex items-center gap-3 mb-4">
@@ -23,19 +24,19 @@ export default function AchievementsSection({ achievements }: AchievementsSectio
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="text-center">
-          <p className="text-2xl font-bold text-accent">{achievements.students?.toLocaleString() || 0}</p>
+          <p className="text-2xl font-bold text-accent">{a.students?.toLocaleString() || 0}</p>
           <p className="text-xs text-muted-foreground">Students</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-accent">{achievements.faculty || 0}</p>
+          <p className="text-2xl font-bold text-accent">{a.faculty || 0}</p>
           <p className="text-xs text-muted-foreground">Faculty</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-accent">{achievements.publications || 0}</p>
+          <p className="text-2xl font-bold text-accent">{a.publications || 0}</p>
           <p className="text-xs text-muted-foreground">Publications</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-accent">{achievements.awards || 0}</p>
+          <p className="text-2xl font-bold text-accent">{a.awards || 0}</p>
           <p className="text-xs text-muted-foreground">Awards</p>
         </div>
       </div>

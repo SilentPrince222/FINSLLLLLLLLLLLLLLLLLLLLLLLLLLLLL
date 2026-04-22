@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getEvents } from '@/lib/database'
 
@@ -15,42 +15,58 @@ interface Event {
 
 export function useEvents() {
   const { user } = useAuth()
+  // Bug 7.2 / 7.5: depend on userId primitive, not user object reference
+  const userId = user?.id ?? null
+
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Bug 7.2: mounted ref to prevent state updates after unmount
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const loadEvents = useCallback(async () => {
-    if (!user) return
+    if (!userId) return
+
+    const abortController = new AbortController()
+    const currentUserId = userId
+
     setLoading(true)
     setError(null)
     try {
-      const { data, error: dbError } = await getEvents(user.id)
+      const { data, error: dbError } = await getEvents(currentUserId)
+
+      if (!mountedRef.current || abortController.signal.aborted) return
+
       if (dbError) throw dbError
 
-      // If no data in database, use mock data for development
-      if (!data || data.length === 0) {
-        const mockEvents = [
-          { id: 1, user_id: user.id, title: 'Сдать лабораторную работу по физике', due_date: '2026-04-16T23:59:00Z', description: 'Лабораторная работа №3', type: 'homework', priority: 'high', created_at: '2026-04-10T10:00:00Z' },
-          { id: 2, user_id: user.id, title: 'Подготовиться к экзамену по математике', due_date: '2026-04-18T09:00:00Z', description: 'Экзамен по алгебре и геометрии', type: 'exam', priority: 'high', created_at: '2026-04-10T10:00:00Z' },
-          { id: 3, user_id: user.id, title: 'Сдать проект по программированию', due_date: '2026-04-20T17:00:00Z', description: 'Финальный проект курса', type: 'homework', priority: 'medium', created_at: '2026-04-10T10:00:00Z' },
-          { id: 4, user_id: user.id, title: 'Пройти тест по английскому', due_date: '2026-04-22T14:00:00Z', description: 'Тест на знание грамматики', type: 'exam', priority: 'low', created_at: '2026-04-10T10:00:00Z' },
-        ]
-        setEvents(mockEvents)
-      } else {
-        setEvents(data)
-      }
+      setEvents(data ?? [])
     } catch (err) {
+      if (!mountedRef.current || abortController.signal.aborted) return
       setError(err instanceof Error ? err.message : 'Failed to load events')
     } finally {
-      setLoading(false)
+      if (mountedRef.current && !abortController.signal.aborted) {
+        setLoading(false)
+      }
     }
-  }, [user])
+
+    return () => abortController.abort()
+  }, [userId])
 
   useEffect(() => {
-    if (user) {
+    if (userId) {
       loadEvents()
+    } else {
+      setEvents([])
+      setLoading(false)
     }
-  }, [user, loadEvents])
+  }, [userId, loadEvents])
 
   return {
     events,

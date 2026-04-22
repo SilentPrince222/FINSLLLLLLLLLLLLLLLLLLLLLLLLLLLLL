@@ -30,11 +30,11 @@ const MOCK_USERS = [
 type AuthContextType = {
     user: User | null
     loading: boolean
-    signIn: (email: string, password: string) => Promise<any>
-    signUp: (email: string, password: string, role: 'student' | 'teacher' | 'parent' | 'admin') => Promise<any>
+    signIn: (_email: string, _password: string) => Promise<any>
+    signUp: (_email: string, _password: string, _role: 'student' | 'teacher' | 'parent' | 'admin') => Promise<any>
     signOut: () => Promise<any>
     refreshUser: () => void
-    checkRole: (role: 'student' | 'teacher' | 'parent' | 'admin') => boolean
+    checkRole: (_role: 'student' | 'teacher' | 'parent' | 'admin') => boolean
     getUserRole: () => string
     getDashboardUrl: () => string
 }
@@ -80,16 +80,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         }
 
-        // Development mode: auto-login with mock student user
+        // Development mode: auto-login with mock student user, but only if the
+        // user has not explicitly signed out (Bug 10.6).
         if (process.env.NODE_ENV === 'development') {
-            const devUser = {
-                id: 'student-1',
-                email: 'student@demo.com',
-                user_metadata: { role: 'student', full_name: 'Иван Иванов' },
-                created_at: new Date().toISOString()
-            } as unknown as User
-            localStorage.setItem('mock_user', JSON.stringify(devUser))
-            setUser(devUser)
+            if (!localStorage.getItem('mock_signed_out')) {
+                const devUser = {
+                    id: 'student-1',
+                    email: 'student@demo.com',
+                    user_metadata: { role: 'student', full_name: 'Иван Иванов' },
+                    created_at: new Date().toISOString()
+                } as unknown as User
+                localStorage.setItem('mock_user', JSON.stringify(devUser))
+                setUser(devUser)
+                setLoading(false)
+                return
+            }
+            // User explicitly signed out in this browser — stay logged out
+            setUser(null)
             setLoading(false)
             return
         }
@@ -150,6 +157,8 @@ export function useAuth() {
 
 
 export async function signIn(email: string, password: string) {
+    // Bug 10.6: when the user actively signs in, clear the "signed out" flag
+    localStorage.removeItem('mock_signed_out')
     // Check for mock users first
     const mockUser = MOCK_USERS.find(u => u.email === email)
     if (mockUser && password === 'demo123') {
@@ -184,7 +193,11 @@ export async function signUp(email: string, password: string, role: 'student' | 
 }
 
 export async function signOut() {
+    // Bug 10.6: clear mock_user AND mark that the user explicitly logged out
+    // so the dev-mode auto-login in AuthProvider does not re-insert the session
+    // after the browser is reopened.
     localStorage.removeItem('mock_user')
+    localStorage.setItem('mock_signed_out', '1')
     return supabase.auth.signOut()
 }
 

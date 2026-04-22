@@ -14,6 +14,8 @@ export default function GradeCard({ subject, score, className = '' }: GradeCardP
       <span className="text-sm font-medium text-foreground">{subject}</span>
       <span className={`text-sm font-bold ${isGood ? 'text-success' : 'text-danger'}`}>
         {score}%
+        {/* Bug 5.12: pass/fail conveyed via text, not color alone */}
+        <span className="sr-only">{isGood ? ' (pass)' : ' (fail)'}</span>
       </span>
     </div>
   )

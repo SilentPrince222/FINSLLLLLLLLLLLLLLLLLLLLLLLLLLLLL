@@ -21,7 +21,11 @@ export default function StatCard({ label, value, trend, icon, className = '' }: 
                     <p className="text-xs text-muted-foreground mb-1">{label}</p>
                     <p className="text-2xl font-medium text-accent">{value}</p>
                     {trend && (
-                        <p className={`text-xs mt-1 ${trend.positive ? 'text-green-600' : 'text-red-500'}`}>
+                        // Bug 5.11: add aria-label so screen readers announce the trend meaning
+                        <p
+                            aria-label={`${trend.positive ? 'Up' : 'Down'} ${Math.abs(trend.value)}%`}
+                            className={`text-xs mt-1 ${trend.positive ? 'text-green-600' : 'text-red-500'}`}
+                        >
                             {trend.positive ? '↑' : '↓'} {Math.abs(trend.value)}%
                         </p>
                     )}

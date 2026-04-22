@@ -12,11 +12,12 @@ interface NewsItem {
 }
 
 interface NewsFeedSectionProps {
-  news: NewsItem[]
+  news: NewsItem[] | null
 }
 
 export default function NewsFeedSection({ news }: NewsFeedSectionProps) {
   const t = useTranslations('dashboard')
+  const safeNews = news ?? []
   return (
     <div className="col-span-12 md:col-span-3">
       <Card variant="elevated" hover className="h-full">
@@ -30,7 +31,7 @@ export default function NewsFeedSection({ news }: NewsFeedSectionProps) {
           </div>
         </div>
         <div className="space-y-4">
-          {news.slice(0, 2).map(item => (
+          {safeNews.slice(0, 2).map(item => (
             <div key={item.id} className="p-3 rounded-lg bg-muted/30">
               <div className="aspect-video bg-muted rounded-lg mb-3 flex items-center justify-center">
                 <span className="text-2xl text-muted-foreground">📰</span>
@@ -39,7 +40,7 @@ export default function NewsFeedSection({ news }: NewsFeedSectionProps) {
                 {item.title}
               </h4>
               <p className="text-xs text-muted-foreground mb-2">
-                {new Date(item.date).toLocaleDateString()}
+                {isNaN(new Date(item.date).getTime()) ? '' : new Date(item.date).toLocaleDateString()}
                 {item.author && ` • ${item.author}`}
               </p>
               <p className="text-xs text-muted-foreground line-clamp-3">

@@ -87,6 +87,7 @@ export const transitions = {
 
 // Utility functions for common patterns
 export const getGradeColor = (score: number): string => {
+    if (score < 0 || score > 100) return colors.slate[400]
     if (score >= 90) return colors.success
     if (score >= 80) return colors.primary
     if (score >= 70) return colors.warning
@@ -94,7 +95,11 @@ export const getGradeColor = (score: number): string => {
 }
 
 export const getStatusColor = (status: 'active' | 'inactive'): { bg: string; text: string } => {
-    return status === 'active' 
-        ? { bg: `${colors.success}15`, text: colors.success }
-        : { bg: colors.slate[100], text: colors.slate[500] }
+    if (status === 'active') {
+        return { bg: `${colors.success}15`, text: colors.success }
+    }
+    if (status === 'inactive') {
+        return { bg: colors.slate[100], text: colors.slate[500] }
+    }
+    throw new Error(`Unknown status: ${status}`)
 }

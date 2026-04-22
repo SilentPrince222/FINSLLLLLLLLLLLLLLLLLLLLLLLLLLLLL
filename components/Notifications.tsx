@@ -51,7 +51,11 @@ export default function Notifications() {
                     )}
                 </div>
                 {unreadCount > 0 && (
-                    <button onClick={markAllAsRead} className="text-sm text-blue-600 hover:underline">
+                    // Bug 5.20: add visible focus ring so keyboard users can see focus
+                    <button
+                        onClick={markAllAsRead}
+                        className="text-sm text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                    >
                         Отметить все как прочитанные
                     </button>
                 )}

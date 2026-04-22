@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 import Button from '@/components/Button'
 import ErrorMessage from '@/components/ErrorMessage'
 
@@ -29,8 +28,9 @@ export default function LoginPage() {
         refreshUser()
         router.push('/')
       }, 100)
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in')
+    } catch (_err: any) {
+      // Bug 1.12: show a generic message — never expose raw Supabase error to users
+      setError('Invalid email or password. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -55,8 +55,9 @@ export default function LoginPage() {
         refreshUser()
         router.push('/')
       }, 100)
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in')
+    } catch (_err: any) {
+      // Bug 1.12: show a generic message — never expose raw Supabase error to users
+      setError('Invalid email or password. Please try again.')
     } finally {
       setLoading(false)
     }

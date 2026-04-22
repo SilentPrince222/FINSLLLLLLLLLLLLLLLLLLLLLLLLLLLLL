@@ -34,8 +34,10 @@ const mockChild: Child = {
     ],
 }
 
-export default function ParentDashboard() {
+export default function ParentDashboard({ params }: { params?: { locale?: string } }) {
     const router = useRouter()
+    // Bug 10.8: use locale from params so logout redirects to /ru/ or /kk/ prefix
+    const locale = (params && params.locale) || 'ru'
     const [child] = useState<Child>(mockChild)
     const [showAllGrades, setShowAllGrades] = useState(false)
 
@@ -45,12 +47,21 @@ export default function ParentDashboard() {
         return 'bg-red-100 text-red-700'
     }
 
+    // Bug 10.8: logout redirects to locale-prefixed path
+    const handleLogout = () => {
+        if (locale === 'kk') {
+            router.push('/kk/auth/login')
+        } else {
+            router.push('/ru/auth/login')
+        }
+    }
+
     return (
         <div className="max-w-5xl mx-auto py-8 px-4">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Панель родителя</h1>
                 <button
-                    onClick={() => router.push('/')}
+                    onClick={handleLogout}
                     className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
                 >
                     Выход
