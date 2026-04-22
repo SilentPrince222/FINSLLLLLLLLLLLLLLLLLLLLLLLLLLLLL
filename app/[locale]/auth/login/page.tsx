@@ -28,7 +28,7 @@ const ROLE_ORDER: Role[] = ['student', 'teacher', 'parent', 'admin']
 // Parent/admin roles are not seeded; those buttons will surface an "invalid
 // credentials" error until those accounts are created manually.
 const DEMO_CREDENTIALS: Record<Role, { email: string; password: string }> = {
-    student: { email: 'aidar.alimov@demo.edu', password: 'demo12345' },
+    student: { email: 'aydar.alimov@demo.edu', password: 'demo12345' },
     teacher: { email: 'teacher@demo.edu', password: 'demo12345' },
     parent: { email: 'parent@demo.edu', password: 'demo12345' },
     admin: { email: 'admin@demo.edu', password: 'demo12345' },

@@ -86,45 +86,75 @@ function emailFor(full_name: string): string {
     return `${slug(full_name)}@demo.edu`
 }
 
-// §8.1 step 1 — paginated wipe of all @demo.edu users
+// §8.1 step 1 — paginated wipe of all @demo.edu users.
+// Order matters: clear dependent rows first (grades → profiles) so FK constraints
+// don't block auth.admin.deleteUser. Supabase surfaces FK violations as a generic
+// 500 "Database error deleting user" which is otherwise hard to diagnose.
 async function wipeDemoUsers(): Promise<void> {
     console.log('1. Wiping existing @demo.edu users...')
+
+    // Collect demo user ids first (one pass through auth.users pagination).
+    const demoIds: string[] = []
     let page = 1
     const perPage = 1000
-    let deleted = 0
-
     while (true) {
         const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
         if (error) throw error
         if (!data?.users?.length) break
-
         for (const u of data.users) {
-            if (u.email?.endsWith('@demo.edu')) {
-                const { error: delErr } = await supabase.auth.admin.deleteUser(u.id)
-                if (delErr) throw delErr
-                deleted++
-            }
+            if (u.email?.endsWith('@demo.edu')) demoIds.push(u.id)
         }
-
         if (data.users.length < perPage) break
         page++
     }
-    console.log(`   ${deleted} users deleted.`)
+
+    if (demoIds.length === 0) {
+        console.log('   0 existing demo users — clean slate.')
+        return
+    }
+
+    // Pre-delete dependent rows so auth.admin.deleteUser doesn't hit FK violations.
+    const { error: gErr } = await (supabase.from('grades') as any)
+        .delete()
+        .or(`student_id.in.(${demoIds.join(',')}),teacher_id.in.(${demoIds.join(',')})`)
+    if (gErr) console.warn(`   (grades pre-wipe warn: ${gErr.message})`)
+
+    const { error: pErr } = await (supabase.from('profiles') as any).delete().in('id', demoIds)
+    if (pErr) console.warn(`   (profiles pre-wipe warn: ${pErr.message})`)
+
+    // Now delete the auth users; tolerate individual failures so a stuck row
+    // doesn't block re-seeding the remaining 30+ accounts.
+    let deleted = 0
+    let failed = 0
+    for (const id of demoIds) {
+        const { error: delErr } = await supabase.auth.admin.deleteUser(id)
+        if (delErr) {
+            failed++
+            console.warn(`   (delete ${id} failed: ${delErr.message})`)
+        } else {
+            deleted++
+        }
+    }
+    console.log(`   ${deleted} users deleted, ${failed} failed.`)
 }
 
-// Bounded poll for the handle_new_user trigger to materialize the profile row.
-// Cold Free-tier projects can take multi-second to warm up — 8s covers the practical worst case.
-async function waitForProfile(id: string, timeoutMs = 8000): Promise<void> {
+// Ensure a profiles row exists for the given auth user. Handles both environments:
+// - projects where `handle_new_user` trigger auto-creates the profile (wait for it)
+// - projects without the trigger installed (insert manually after a brief wait)
+async function ensureProfile(
+    id: string,
+    data: { email: string; role: string; full_name: string; group_name?: string; attendance_rate?: number },
+    timeoutMs = 4000,
+): Promise<void> {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
-        const { data } = await supabase.from('profiles').select('id').eq('id', id).maybeSingle()
-        if (data) return
-        await new Promise(r => setTimeout(r, 100))
+        const { data: row } = await supabase.from('profiles').select('id').eq('id', id).maybeSingle()
+        if (row) return
+        await new Promise(r => setTimeout(r, 200))
     }
-    throw new Error(
-        `handle_new_user did not create profile for ${id} within ${timeoutMs}ms — ` +
-        `project may be cold. Re-run after 30s or verify the trigger is installed.`
-    )
+    // Trigger didn't fire in time — create the profile manually.
+    const { error } = await (supabase.from('profiles') as any).insert({ id, ...data })
+    if (error && error.code !== '23505') throw error // 23505 = duplicate key (trigger raced us)
 }
 
 // Pre-flight: ensure the transliteration slugger doesn't collide two student names to the
@@ -151,10 +181,27 @@ async function createTeacher(email: string, full_name: string): Promise<string> 
     })
     if (error || !data.user) throw error ?? new Error('createUser returned no user')
     const id = data.user.id
-    await waitForProfile(id)
+    await ensureProfile(id, { email, role: 'teacher', full_name })
     // supabase-js generic inference breaks on service-role client for .update(); cast pragmatically
     const { error: upErr } = await (supabase.from('profiles') as any)
         .update({ role: 'teacher', full_name })
+        .eq('id', id)
+    if (upErr) throw upErr
+    return id
+}
+
+async function createSimpleRoleUser(email: string, full_name: string, role: 'parent' | 'admin'): Promise<string> {
+    const { data, error } = await supabase.auth.admin.createUser({
+        email,
+        password: PASSWORD,
+        email_confirm: true,
+        user_metadata: { role, full_name },
+    })
+    if (error || !data.user) throw error ?? new Error(`createUser failed for ${email}`)
+    const id = data.user.id
+    await ensureProfile(id, { email, role, full_name })
+    const { error: upErr } = await (supabase.from('profiles') as any)
+        .update({ role, full_name })
         .eq('id', id)
     if (upErr) throw upErr
     return id
@@ -170,9 +217,8 @@ async function createStudent(full_name: string, group_name: string): Promise<str
     })
     if (error || !data.user) throw error ?? new Error(`createUser failed for ${email}`)
     const id = data.user.id
-    await waitForProfile(id)
-
     const attendance_rate = Math.round(clamp(normalSample(90, 5), 70, 100))
+    await ensureProfile(id, { email, role: 'student', full_name, group_name, attendance_rate })
     const { error: upErr } = await (supabase.from('profiles') as any)
         .update({ role: 'student', full_name, group_name, attendance_rate })
         .eq('id', id)
@@ -238,6 +284,12 @@ async function main() {
         console.log(`   ✓ IT-22: ${emailFor(name)}`)
     }
 
+    console.log('\n3b. Creating parent + admin demo accounts...')
+    await createSimpleRoleUser('parent@demo.edu', 'Ата-ана (демо)', 'parent')
+    console.log('   ✓ parent@demo.edu (Ата-ана демо)')
+    await createSimpleRoleUser('admin@demo.edu', 'Әкімші (демо)', 'admin')
+    console.log('   ✓ admin@demo.edu (Әкімші демо)')
+
     console.log('\n4. Generating grades (30 × 5 subjects × 3 grades = 450 rows)...')
     const allGrades: GradeInsert[] = studentIds.flatMap(sid => buildGradesForStudent(sid, teacherIds))
     // batch insert to avoid 1 round-trip per row
@@ -253,6 +305,8 @@ async function main() {
     console.log('   Teacher: teacher@demo.edu  /  demo12345')
     console.log(`   Student: ${emailFor(STUDENTS_IT21[0])}  /  demo12345  (Айдар Алимов)`)
     console.log(`   Student: ${emailFor(STUDENTS_IT22[0])}  /  demo12345  (Арман Бекетов)`)
+    console.log('   Parent:  parent@demo.edu  /  demo12345')
+    console.log('   Admin:   admin@demo.edu   /  demo12345')
     console.log('\n6. ⚠️  Run the post-seed DDL in Supabase SQL Editor now (supabase-js has no DDL path):')
     console.log('   alter table grades validate constraint grades_semester_fixed;')
     console.log('   alter table grades alter column teacher_id set not null;')
