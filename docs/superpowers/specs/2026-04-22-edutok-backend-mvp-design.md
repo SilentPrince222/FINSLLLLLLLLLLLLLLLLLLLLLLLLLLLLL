@@ -266,7 +266,7 @@ useEffect(() => {
 
 ### 7.2 Server-side filter
 
-The `filter: student_id=eq.<me>` pushes filtering to Postgres. Without it, every `INSERT` on `grades` broadcasts to every connected client — wasteful and exposes metadata of other students' activity even though RLS would redact the payload.
+The `filter: student_id=eq.<me>` pushes filtering to Postgres. Without it, every `INSERT` on `grades` broadcasts to every connected client — wasteful and inefficient, even though RLS would drop events on rows the subscriber can't `SELECT` (see §7.3).
 
 ### 7.3 RLS + Realtime
 
