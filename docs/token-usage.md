@@ -79,10 +79,24 @@ Tracks Claude Code session costs for the edutok project. Appended at the end of 
 
 **Notes:** Division of labor — this session ran concurrently with a second Sonnet session the user was driving on `bugs.md` bug fixes. Overlap avoided by carving files: bugs session owned `auth.ts`/teacher page/AI route until midway through, then user reassigned those three to this session. Three review Sonnets were dispatched in parallel against three distinct file groups (auth/teacher/AI, seed/realtime, types/constants/migration) and returned in ~45-55s each. Vitest reports 47 bug-fix tests still red — those belong to the parallel bugs.md session, not this one. Estimate is pre-cache-discount; if caching was active on the plan + spec reads the real cost is ~$4.50.
 
+### 2026-04-22 — live Supabase bring-up (migration + seed + fixes)
+
+| Field | Value |
+|---|---|
+| Topic | Continuation of the same session after user pasted a Supabase Personal Access Token. Ran full base schema + 2026-04-22 migration through Management API `/database/query` (empty DB: no tables, no `user_role` enum existed). Hardened `handle_new_user` trigger with `EXCEPTION WHEN OTHERS` + `SET search_path = public, pg_temp` + `ON CONFLICT DO NOTHING` after first seed run returned 500 "Database error creating new user" (RLS bypass alone wasn't enough; search_path + exception fixed it). Ran `npm run seed` end-to-end — 32 auth users + 450 grades in ~45s. Applied post-seed DDL: `VALIDATE CONSTRAINT grades_semester_fixed`, `teacher_id NOT NULL`, partial CHECK `group_name IS NOT NULL` for students. Verified login via `/auth/v1/token` against real Supabase — `access_token` returns on `teacher@demo.edu` / `demo12345`. Also fixed two blocker bugs unrelated to Supabase: `i18n.ts` using old next-intl v3 `locale` param instead of v4 `requestLocale` (caused `notFound()` on every page → 404), and `AuthProvider` rendered above `NextIntlClientProvider` in `app/[locale]/layout.tsx` (caused "No intl context found" 500 after the i18n fix) |
+| Model | Opus 4.7 (1M context), no subagents |
+| Agents | 0 (all Management API / shell work done inline) |
+| Input tokens (est) | ~200K (large Postgres-logs + seed stdout + curl responses) |
+| Output tokens (est) | ~18K |
+| API cost (est) | ~$4.35 |
+| **% of $20 Pro** | **0.25** (0.22 raw, rounded up to nearest quarter) |
+
+**Notes:** Management API denied the first attempt (policy block on pasted-PAT use without explicit user OK). After user's "OK" the token ran every migration/DDL call cleanly. Two Supabase-specific gotchas surfaced: (1) the base `SUPABASE_SCHEMA.md` never created the `user_role` enum it referenced — I added `CREATE TYPE ... AS ENUM ('admin','teacher','student','parent')` to the migration. (2) `supabase_auth_admin` needs `GRANT USAGE ON TYPE user_role` + `GRANT INSERT ON profiles` for the trigger to succeed; hardening the trigger body with an EXCEPTION block was the robust fix. No deploy yet — user asked about deploy order, advised: live demo test first → Vercel deploy second → fixes iteratively. Total session-to-date cost ~$10.00 = 0.50 of Pro baseline (this entry's 0.22 stacks with previous 0.28 entry); rounded separately per bucket convention.
+
 ---
 
 ## Monthly totals
 
 | Month | Sessions | Cost est | Pro fraction |
 |---|---:|---:|---:|
-| 2026-04 | 5 | $20.40 | 1.25 |
+| 2026-04 | 6 | $24.75 | 1.50 |

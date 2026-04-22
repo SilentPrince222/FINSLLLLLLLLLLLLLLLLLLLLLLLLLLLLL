@@ -35,21 +35,21 @@ export default async function RootLayout({
     return (
         <html lang={locale} suppressHydrationWarning>
             <body className={`${inter.variable} font-sans antialiased min-h-screen`}>
-                <AuthProvider>
-                    <SupabaseProvider>
-                        <ThemeProvider
-                            attribute="class"
-                            defaultTheme="system"
-                            enableSystem
-                            disableTransitionOnChange
-                        >
-                            <NextIntlClientProvider messages={messages}>
+                <NextIntlClientProvider messages={messages}>
+                    <AuthProvider>
+                        <SupabaseProvider>
+                            <ThemeProvider
+                                attribute="class"
+                                defaultTheme="system"
+                                enableSystem
+                                disableTransitionOnChange
+                            >
                                 {children}
                                 <Toaster position="top-right" richColors />
-                            </NextIntlClientProvider>
-                        </ThemeProvider>
-                    </SupabaseProvider>
-                </AuthProvider>
+                            </ThemeProvider>
+                        </SupabaseProvider>
+                    </AuthProvider>
+                </NextIntlClientProvider>
             </body>
         </html>
     );

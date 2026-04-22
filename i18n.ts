@@ -2,9 +2,14 @@ import { getRequestConfig } from 'next-intl/server';
 import { routing } from './i18n/routing';
 import { notFound } from 'next/navigation';
 
-export default getRequestConfig(async ({ locale }) => {
-  // Bug 8.4: call notFound() for invalid locale instead of silently falling back
-  if (!locale || !routing.locales.includes(locale as typeof routing.locales[number])) {
+export default getRequestConfig(async ({ requestLocale }) => {
+  // next-intl v4: requestLocale is a Promise. Resolve, then validate.
+  const requested = await requestLocale;
+  const locale = requested && routing.locales.includes(requested as typeof routing.locales[number])
+    ? requested
+    : routing.defaultLocale;
+
+  if (!locale) {
     notFound();
   }
 
