@@ -1,100 +1,137 @@
-# 🎓 AI-Powered College Management System
+# CMS — College Management System
 
-A modern, intelligent college management platform built with Next.js and Supabase, featuring AI-driven grade analysis and complete academic administration tools.
+> **Одна платформа. Четыре роли. Ноль бумажной волокиты.**
 
----
-
-## ✨ Features
-
-| Module | Description |
-|--------|-------------|
-| **🔐 Role-based Authentication** | Secure login system with separate access for Admin, Faculty, and Student roles with proper permission controls |
-| **📊 Grades Management** | Complete grading system with mark entry, transcript generation, and academic performance tracking |
-| **📅 Timetable System** | Dynamic class scheduling, conflict detection, and personalized timetable views for each user |
-| **🤖 AI Grade Analyzer** | Intelligent performance insights, trend prediction, weakness identification, and personalized improvement recommendations |
+Создан для современных колледжей и вузов Казахстана — CMS заменяет разрозненные таблицы, бумажные журналы и хаос в WhatsApp-группах единой интеллектуальной системой управления учебным процессом.
 
 ---
 
-## 🛠️ Tech Stack
+## Проблема, которую знает каждый администратор
 
-- **Frontend**: Next.js 14 (App Router)
-- **Backend & Database**: Supabase (PostgreSQL, Auth, Storage)
-- **Styling**: Tailwind CSS
-- **AI Integration**: OpenAI / GPT for grade analysis
-- **Deployment**: Vercel
+- Оценки хранятся в 12 разных Excel-файлах на 12 разных компьютерах
+- Студенты звонят в секретариат, чтобы узнать своё расписание
+- Данные о посещаемости становятся известны только в конце семестра
+- Родители не видят ничего — пока студент уже не на грани отчисления
+- Преподаватели тратят часы на ручной разбор успеваемости
+
+**CMS решает всё это. Сразу после установки.**
 
 ---
 
-## 🚀 Running Locally
+## Чем CMS отличается от остальных
 
-### Prerequisites
-- Node.js 18+
-- npm / yarn / pnpm
-- Supabase account (or local Supabase instance)
+### 🤖 ИИ-анализ успеваемости
+Не просто журнал оценок — интеллектуальный советник. Встроенный ИИ-анализатор читает академическую историю каждого студента, выявляет слабые предметы, замечает тревожные тенденции до того, как они стали проблемой, и выдаёт конкретные рекомендации на понятном языке. Никаких отдельных BI-инструментов. Никакого ручного анализа. Просто открываешь дашборд — и всё знаешь.
 
-### Step 1: Clone the repository
+### 👥 Четыре роли, одна платформа
+Каждый участник процесса получает интерфейс под себя — не универсальный портал для всех подряд:
+
+| Роль | Что видит |
+|------|-----------|
+| **Студент** | Оценки, расписание, ИИ-инсайты, библиотека, материалы, запись на консультацию |
+| **Преподаватель** | Список студентов, ввод оценок, аналитика по каждому, управление расписанием |
+| **Родитель** | Успеваемость ребёнка, посещаемость, оценки в реальном времени |
+| **Администратор** | Аналитика по всему учреждению, управление студентами и преподавателями |
+
+Никаких общих логинов. Никаких лишних прав доступа. Нужные данные — нужному человеку.
+
+### 📱 QR-посещаемость — отметить 30 студентов за 10 секунд
+Каждое занятие генерирует уникальный QR-код. Студенты сканируют при входе. Посещаемость фиксируется мгновенно. Бумажные списки и ручной ввод остаются в прошлом.
+
+### 📊 Аналитика, которая реально говорит о чём-то
+Интерактивные графики показывают динамику ГПА, успеваемость по каждому предмету и посещаемость за настраиваемые периоды. Замечай проблемную группу до сессии — не после.
+
+### 📅 Живое расписание для каждого пользователя
+Персональное недельное расписание для каждого студента и преподавателя из живой базы данных. Изменил аудиторию или время — все затронутые пользователи видят это сразу. Никаких устаревших PDF-расписаний на стендах.
+
+### 📚 Цифровая библиотека + хаб учебных материалов
+Преподаватели загружают лекционные PDF, презентации, видео лабораторных и ссылки в одном месте. Студенты находят всё необходимое без единого письма на почту. Поиск, категории, всегда доступно.
+
+### 💬 Прямая связь с куратором
+Студенты отправляют сообщения куратору прямо через платформу. Никаких потерянных сообщений в WhatsApp, никаких поисков нужного номера. Каждое обращение зафиксировано.
+
+### 🌐 Создан для Казахстана — русский + казахский
+Полная двуязычная поддержка сразу из коробки. Каждый экран, каждая подпись, каждое уведомление — на **русском** и **казахском**. Никаких отдельных проектов по локализации.
+
+### 🌙 Современный интерфейс, тёмная тема в комплекте
+Чистый минималистичный UI, которым персонал и студенты действительно хотят пользоваться. Автоматическая тёмная/светлая тема. Работает на компьютере и смартфоне.
+
+---
+
+## Технологическая основа
+
+| Слой | Технология |
+|------|-----------|
+| Фронтенд | Next.js 14 (App Router) |
+| База данных и авторизация | Supabase (PostgreSQL) |
+| Стили | Tailwind CSS + собственная дизайн-система |
+| ИИ-анализ | Gemini (движок анализа успеваемости) |
+| Деплой | Vercel (в один клик) |
+
+---
+
+## Запуск за 30 минут
+
+### 1. Клонирование
 ```bash
 git clone <repository-url>
-cd college-management-system
-```
-
-### Step 2: Install dependencies
-```bash
+cd edutok
 npm install
 ```
 
-### Step 3: Configure environment variables
-Create a `.env.local` file in root directory:
+### 2. Подключение базы данных
+Создайте проект в Supabase, примените схему из `SUPABASE_SCHEMA.md` через SQL Editor, затем создайте `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-OPENAI_API_KEY=your_openai_api_key
 ```
 
-### Step 4: Run development server
+### 3. Локальный запуск
 ```bash
 npm run dev
+# → http://localhost:3000
 ```
 
-Application will be available at `http://localhost:3000`
+### 4. Деплой в продакшн
+Пуш на GitHub → подключение к Vercel → добавление переменных окружения → готово. У вашего колледжа есть живая академическая платформа.
 
 ---
 
-## 📁 Folder Structure
+## Демо-аккаунты
 
-```
-src/
-├── app/              # Next.js App Router pages & layouts
-├── components/       # Reusable UI components
-├── lib/              # Supabase client, utilities, AI logic
-├── types/            # TypeScript type definitions
-└── styles/           # Global Tailwind styles
-```
+Система поставляется с готовыми демо-данными для всех четырёх ролей:
+
+| Роль | Email | Пароль |
+|------|-------|--------|
+| Студент | `student@demo.edu` | `demo12345` |
+| Преподаватель | `teacher@demo.edu` | `demo12345` |
+| Родитель | `parent@demo.edu` | `demo12345` |
+| Администратор | `admin@demo.edu` | `demo12345` |
 
 ---
 
-## 🔮 Future Improvements
+## Что уже реализовано
 
-### AI Enhancements
-- [ ] Automated attendance pattern analysis
-- [ ] Student dropout risk prediction
-- [ ] Personalized study path recommendations
-- [ ] AI-powered assignment grading
-
-### Analytics & Reporting
-- [ ] Department performance dashboards
-- [ ] Real-time academic metrics
-- [ ] Custom report generation
-- [ ] Parent portal with progress updates
-
-### Additional Features
-- [ ] Library management integration
-- [ ] Examination scheduling system
-- [ ] Online assignment submission
-- [ ] Internal messaging system
+- [x] Ролевая система авторизации (студент / преподаватель / родитель / администратор)
+- [x] ИИ-анализ успеваемости с персональными рекомендациями
+- [x] Управление оценками (добавление, удаление, просмотр)
+- [x] Персональное расписание для каждого пользователя (живая БД)
+- [x] QR-сканер посещаемости
+- [x] Дашборд аналитики с трендовыми графиками
+- [x] Цифровая библиотека с поиском и статусом доступности
+- [x] Хаб материалов (PDF, видео, ссылки, презентации)
+- [x] Запись на консультацию к преподавателю
+- [x] Прямая связь с куратором
+- [x] Двуязычный интерфейс (русский + казахский)
+- [x] Тёмная / светлая тема
+- [x] Адаптивный дизайн для мобильных устройств
 
 ---
 
 <div align="center">
-Built with ❤️ for modern educational institutions
+
+**Готовы модернизировать своё учреждение?**
+
+CMS закрывает эпоху таблиц — навсегда.
+
 </div>
