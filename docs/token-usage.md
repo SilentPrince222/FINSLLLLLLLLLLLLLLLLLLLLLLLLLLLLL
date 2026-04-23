@@ -93,10 +93,22 @@ Tracks Claude Code session costs for the edutok project. Appended at the end of 
 
 **Notes:** Management API denied the first attempt (policy block on pasted-PAT use without explicit user OK). After user's "OK" the token ran every migration/DDL call cleanly. Two Supabase-specific gotchas surfaced: (1) the base `SUPABASE_SCHEMA.md` never created the `user_role` enum it referenced — I added `CREATE TYPE ... AS ENUM ('admin','teacher','student','parent')` to the migration. (2) `supabase_auth_admin` needs `GRANT USAGE ON TYPE user_role` + `GRANT INSERT ON profiles` for the trigger to succeed; hardening the trigger body with an EXCEPTION block was the robust fix. No deploy yet — user asked about deploy order, advised: live demo test first → Vercel deploy second → fixes iteratively. Total session-to-date cost ~$10.00 = 0.50 of Pro baseline (this entry's 0.22 stacks with previous 0.28 entry); rounded separately per bucket convention.
 
+### 2026-04-23 — new RED tests for uncovered bugs (17 tests)
+
+| Field | Value |
+|---|---|
+| Topic | Scanned codebase for bugs not covered by existing 184 tests. Found and wrote 17 RED tests in `tests/unit/new-bugs-scan.test.tsx` targeting: HomeClient.tsx (wrong useRouter import, getDashboardUrl in dep array, missing early null return); GradesCalendar.tsx (index key on calendar grid, hardcoded bg-white, missing role="dialog"/aria-modal, no Escape handler, UTC off-by-one on date display, no keyboard handler on day cells); useTimetable.ts + useEvents.ts (abort cleanup placed inside async fn = dead code, userId-change race condition). All 17 tests confirmed RED (failing). |
+| Model | Sonnet 4.6 |
+| Agents | 1 Explore subagent (bug scan) |
+| Input tokens (est) | ~80K |
+| Output tokens (est) | ~8K |
+| API cost (est) | ~$0.36 |
+| **% of $20 Pro** | **0.25** (0.018 raw, rounded up to nearest quarter) |
+
 ---
 
 ## Monthly totals
 
 | Month | Sessions | Cost est | Pro fraction |
 |---|---:|---:|---:|
-| 2026-04 | 6 | $24.75 | 1.50 |
+| 2026-04 | 7 | $25.11 | 1.50 |

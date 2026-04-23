@@ -304,7 +304,7 @@ describe('Card passes through data-testid to DOM element (Bug 5.14)', () => {
   it('renders data-testid attribute on the DOM element when passed as a prop', async () => {
     const Card = (await import('@/components/ui/Card')).default
     const { container } = render(
-      React.createElement(Card, { 'data-testid': 'test-card' }, 'Hello')
+      React.createElement(Card, { 'data-testid': 'test-card', children: 'Hello' } as any)
     )
     const el = container.querySelector('[data-testid="test-card"]')
     expect(el).toBeTruthy()
@@ -314,7 +314,7 @@ describe('Card passes through data-testid to DOM element (Bug 5.14)', () => {
   it('passes through arbitrary data attributes via rest props spread', async () => {
     const Card = (await import('@/components/ui/Card')).default
     const { container } = render(
-      React.createElement(Card, { 'data-testid': 'my-card', 'data-role': 'container' }, 'Content')
+      React.createElement(Card, { 'data-testid': 'my-card', 'data-role': 'container', children: 'Content' } as any)
     )
     expect(container.querySelector('[data-testid="my-card"]')).toBeTruthy()
     expect(container.querySelector('[data-role="container"]')).toBeTruthy()

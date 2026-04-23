@@ -78,6 +78,16 @@ function makeApiRequest(body: any, headers?: Record<string, string>) {
     headers: {
       get: (h: string) => headers?.[h.toLowerCase()] ?? null,
     },
+    body: body ? new ReadableStream({
+      start(controller) {
+        if (typeof body === 'string') {
+          controller.enqueue(new TextEncoder().encode(body))
+        } else {
+          controller.enqueue(new TextEncoder().encode(JSON.stringify(body)))
+        }
+        controller.close()
+      }
+    }) : null,
   } as any as Request
 }
 
@@ -90,9 +100,11 @@ function makeNextResponseMock() {
       this.status = init?.status ?? 200
     }
     static json(data: any, init?: { status?: number }) {
-      return new NextResponse(JSON.stringify(data), init)
+      return new NextResponse(data, init)
     }
   }
+  // Override the global Response to use our mock
+  global.Response = NextResponse as any
   return { NextResponse }
 }
 
@@ -209,7 +221,7 @@ describe('Bug 3.7: All invalid-data errors return { error: "Invalid grade data" 
     const res = await POST(makeApiRequest(
       { grades: 'not-an-array' },
       { 'content-type': 'application/json' }
-    ))
+    )) as any
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('Invalid grade data')
   })
@@ -221,7 +233,7 @@ describe('Bug 3.7: All invalid-data errors return { error: "Invalid grade data" 
     const res = await POST(makeApiRequest(
       { grades: bigGrades },
       { 'content-type': 'application/json' }
-    ))
+    )) as any
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('Invalid grade data')
   })
@@ -232,7 +244,7 @@ describe('Bug 3.7: All invalid-data errors return { error: "Invalid grade data" 
     const res = await POST(makeApiRequest(
       { grades: [] },
       { 'content-type': 'application/json' }
-    ))
+    )) as any
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('Invalid grade data')
   })

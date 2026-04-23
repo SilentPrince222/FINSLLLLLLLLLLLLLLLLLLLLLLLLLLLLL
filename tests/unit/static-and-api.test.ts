@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import { cn } from '@/lib/utils'
@@ -381,7 +381,7 @@ describe('API route /api/ai/analyze', () => {
           this.status = init?.status ?? 200
         }
         static json(data: any, init?: { status?: number }) {
-          return new NextResponse(JSON.stringify(data), init)
+          return new NextResponse(data, init)
         }
       }
       return { NextResponse }
@@ -394,7 +394,19 @@ describe('API route /api/ai/analyze', () => {
   })
 
   function makeRequest(body: any) {
-    return { json: () => Promise.resolve(body) } as any as Request
+    return {
+      json: () => Promise.resolve(body),
+      body: body ? new ReadableStream({
+        start(controller) {
+          if (typeof body === 'string') {
+            controller.enqueue(new TextEncoder().encode(body))
+          } else {
+            controller.enqueue(new TextEncoder().encode(JSON.stringify(body)))
+          }
+          controller.close()
+        }
+      }) : null,
+    } as any as Request
   }
 
   // GREEN: valid request works
@@ -407,7 +419,7 @@ describe('API route /api/ai/analyze', () => {
         { subject: 'Math', score: 90 },
         { subject: 'Physics', score: 70 },
       ]
-    }))
+    })) as any as any as any as any
 
     expect(res.status).toBe(200)
     expect(res.body.average).toBe(80)
@@ -422,7 +434,7 @@ describe('API route /api/ai/analyze', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u2-empty' } } })
 
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
-    const res = await POST(makeRequest({ grades: [] }))
+    const res = await POST(makeRequest({ grades: [] })) as any
 
     expect(res.status).toBe(400)
   })
@@ -432,7 +444,7 @@ describe('API route /api/ai/analyze', () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
 
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
-    const res = await POST(makeRequest({ grades: [{ subject: 'Math', score: 50 }] }))
+    const res = await POST(makeRequest({ grades: [{ subject: 'Math', score: 50 }] })) as any
 
     expect(res.status).toBe(401)
     expect(res.body.error).toBe('Unauthorized')
@@ -446,11 +458,11 @@ describe('API route /api/ai/analyze', () => {
     const validBody = { grades: [{ subject: 'Math', score: 85 }] }
 
     for (let i = 0; i < 5; i++) {
-      const res = await POST(makeRequest(validBody))
+      const res = await POST(makeRequest(validBody)) as any
       expect(res.status).toBe(200)
     }
 
-    const sixth = await POST(makeRequest(validBody))
+    const sixth = await POST(makeRequest(validBody)) as any
     expect(sixth.status).toBe(429)
     expect(sixth.body.error).toBe('Too many requests')
   })
@@ -462,7 +474,7 @@ describe('API route /api/ai/analyze', () => {
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
     const res = await POST(makeRequest({
       grades: [{ subject: 'Math', score: 'eighty' }]
-    }))
+    })) as any
 
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('Invalid grade data')
@@ -475,7 +487,7 @@ describe('API route /api/ai/analyze', () => {
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
     const res = await POST(makeRequest({
       grades: [{ subject: 'Math', score: 150 }]
-    }))
+    })) as any
 
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('Invalid grade data')
@@ -488,7 +500,7 @@ describe('API route /api/ai/analyze', () => {
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
     const res = await POST(makeRequest({
       grades: [{ score: 85 }]
-    }))
+    })) as any
 
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('Invalid grade data')
@@ -499,7 +511,7 @@ describe('API route /api/ai/analyze', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u-bug37' } } })
 
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
-    const res = await POST(makeRequest({ grades: 'not-array' }))
+    const res = await POST(makeRequest({ grades: 'not-array' })) as any
 
     expect(res.status).toBe(400)
     // Route currently returns 'Invalid request' — this assertion FAILS (RED)
@@ -512,7 +524,7 @@ describe('API route /api/ai/analyze', () => {
 
     const { POST } = await import('@/app/[locale]/api/ai/analyze/route')
     const fiftyOneGrades = Array.from({ length: 51 }, (_, i) => ({ subject: `Subject${i}`, score: 80 }))
-    const res = await POST(makeRequest({ grades: fiftyOneGrades }))
+    const res = await POST(makeRequest({ grades: fiftyOneGrades })) as any
 
     expect(res.status).toBe(400)
     // Route currently returns 'Invalid request' — this assertion FAILS (RED)
@@ -778,7 +790,7 @@ describe('BUG 3.10: /api/ai/analyze should console.warn on unauthenticated acces
           this.status = init?.status ?? 200
         }
         static json(data: any, init?: { status?: number }) {
-          return new NextResponse(JSON.stringify(data), init)
+          return new NextResponse(data, init)
         }
       }
       return { NextResponse }

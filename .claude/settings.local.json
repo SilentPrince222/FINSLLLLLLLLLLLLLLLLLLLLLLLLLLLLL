@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest *)",
+      "Bash(node -e \"const u=process.env.NEXT_PUBLIC_SUPABASE_URL; console.log\\('URL set:', !!u, u ? u.slice\\(0,40\\) : 'MISSING'\\)\")"
+    ]
+  }
+}

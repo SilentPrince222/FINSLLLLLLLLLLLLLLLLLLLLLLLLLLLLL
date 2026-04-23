@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
-import PortalShell from '@/components/portal/PortalShell'
 import { TrendingUp, Plus, Search, Pencil, Trash2 } from 'lucide-react'
 
 type Role = 'student' | 'teacher' | 'parent' | 'admin'
@@ -56,11 +55,7 @@ export default function AdminDashboard() {
     }, [user, effectiveRole, loading, router])
 
     if (loading || !user) {
-        return (
-            <PortalShell role="admin" title="Админ-панель">
-                <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
-            </PortalShell>
-        )
+        return <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
     }
     if (effectiveRole && effectiveRole !== 'admin') return null
 
@@ -82,10 +77,8 @@ export default function AdminDashboard() {
         if (confirm('Удалить пользователя?')) setUsers(users.filter(u => u.id !== id))
     }
 
-    const adminName = (user.user_metadata as any)?.full_name ?? 'Администратор'
-
     return (
-        <PortalShell role="admin" title="Админ-панель" userName={adminName} userSub="Администратор · CMS">
+        <>
             {/* Stat cards */}
             <div className="g4" style={{ marginBottom: 18 }}>
                 <div className="p-card cyan">
@@ -257,6 +250,6 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             )}
-        </PortalShell>
+        </>
     )
 }

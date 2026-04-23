@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase'
 import { createGrade } from '@/lib/database'
 import { SEMESTER, SUBJECTS } from '@/lib/constants'
 import type { Database } from '@/types/database'
-import PortalShell from '@/components/portal/PortalShell'
 import { Check, TrendingUp } from 'lucide-react'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -61,11 +60,7 @@ export default function TeacherDashboard() {
     }, [user, effectiveRole])
 
     if (loading || !user) {
-        return (
-            <PortalShell role="teacher" title="Панель преподавателя">
-                <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
-            </PortalShell>
-        )
+        return <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
     }
     if (effectiveRole && effectiveRole !== 'teacher') return null
 
@@ -100,7 +95,7 @@ export default function TeacherDashboard() {
     const teacherName = (user.user_metadata as any)?.full_name ?? 'Преподаватель'
 
     return (
-        <PortalShell role="teacher" title="Панель преподавателя" userName={teacherName} userSub="Преподаватель · КТИ">
+        <>
             {/* Top stats */}
             <div className="g12" style={{ marginBottom: 18 }}>
                 <div className="p-card magenta span3">
@@ -235,6 +230,6 @@ export default function TeacherDashboard() {
                     </div>
                 </div>
             </div>
-        </PortalShell>
+        </>
     )
 }

@@ -377,7 +377,7 @@ describe('Bug 5.8 – Badge: showDot has aria-label', () => {
   it('renders dot with aria-label when showDot=true', async () => {
     const { default: Badge } = await import('@/components/ui/Badge')
     render(
-      React.createElement(Badge, { showDot: true, status: 'active' }, 'Active')
+      React.createElement(Badge, { showDot: true, status: 'active', children: 'Active' })
     )
     const dot = document.querySelector('[aria-label]') as HTMLElement
     expect(dot).toBeTruthy()
@@ -387,7 +387,7 @@ describe('Bug 5.8 – Badge: showDot has aria-label', () => {
   it('dot aria-label is "inactive" when status is inactive', async () => {
     const { default: Badge } = await import('@/components/ui/Badge')
     render(
-      React.createElement(Badge, { showDot: true, status: 'inactive' }, 'Off')
+      React.createElement(Badge, { showDot: true, status: 'inactive', children: 'Off' })
     )
     const dot = document.querySelector('[aria-label]') as HTMLElement
     expect(dot?.getAttribute('aria-label')).toBe('inactive')
@@ -547,10 +547,10 @@ describe('Bug 5.18 – Modal: body overflow not cleared while another modal is o
     const { default: Modal } = await import('@/components/Modal')
 
     const { unmount: unmountA } = render(
-      React.createElement(Modal, { isOpen: true, onClose: vi.fn(), title: 'A' }, 'Content A')
+      React.createElement(Modal, { isOpen: true, onClose: vi.fn(), title: 'A', children: 'Content A' })
     )
     const { unmount: unmountB } = render(
-      React.createElement(Modal, { isOpen: true, onClose: vi.fn(), title: 'B' }, 'Content B')
+      React.createElement(Modal, { isOpen: true, onClose: vi.fn(), title: 'B', children: 'Content B' })
     )
 
     // Both open → overflow hidden

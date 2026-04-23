@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
-import PortalShell from '@/components/portal/PortalShell'
 import { Send } from 'lucide-react'
 
 type Child = {
@@ -65,16 +64,11 @@ export default function ParentDashboard() {
     }, [user, effectiveRole, loading, router])
 
     if (loading || !user) {
-        return (
-            <PortalShell role="parent" title="Кабинет родителя">
-                <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
-            </PortalShell>
-        )
+        return <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
     }
     if (effectiveRole && effectiveRole !== 'parent') return null
 
     const visible = showAllGrades ? child.grades : child.grades.slice(0, 3)
-    const parentName = (user.user_metadata as any)?.full_name ?? 'Родитель'
 
     const sendMessage = () => {
         if (!message.trim()) return
@@ -83,7 +77,7 @@ export default function ParentDashboard() {
     }
 
     return (
-        <PortalShell role="parent" title="Кабинет родителя" userName={parentName} userSub="Родитель · ИС-21">
+        <>
             {/* Child card */}
             <div className="p-card success" style={{ marginBottom: 18, padding: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -194,6 +188,6 @@ export default function ParentDashboard() {
                     </button>
                 </div>
             </div>
-        </PortalShell>
+        </>
     )
 }
