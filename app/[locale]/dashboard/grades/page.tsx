@@ -3,17 +3,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getGrades, createGrade, deleteGrade } from '@/lib/database'
-import { GradesCalendar } from '@/components/ui'
+import { Trash2, Plus, BookOpen, BarChart2, Target } from 'lucide-react'
 import type { Database } from '@/types/database'
 
 type Grade = Database['public']['Tables']['grades']['Row']
 
-type Lesson = {
-    id: number
-    subject: string
-    time: string
-    grade: number
-    date: string
+function gradeColorVar(score: number): string {
+    if (score >= 85) return 'var(--p-success)'
+    if (score >= 70) return 'var(--p-fg1)'
+    return 'var(--p-amber)'
 }
 
 export default function GradesPage() {
@@ -21,16 +19,10 @@ export default function GradesPage() {
     const [grades, setGrades] = useState<Grade[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [lessons, setLessons] = useState<Lesson[]>([
-        { id: 1, subject: 'Mathematics', time: '09:00', grade: 85, date: '2026-04-15' },
-        { id: 2, subject: 'Physics', time: '11:00', grade: 78, date: '2026-04-16' },
-        { id: 3, subject: 'Computer Science', time: '14:00', grade: 92, date: '2026-04-17' },
-        { id: 4, subject: 'English', time: '10:00', grade: 88, date: '2026-04-18' },
-    ])
 
     const [subject, setSubject] = useState('')
     const [score, setScore] = useState('')
-    const [semester, setSemester] = useState('Fall 2026')
+    const [semester, setSemester] = useState('Spring 2026')
     const [saving, setSaving] = useState(false)
 
     const loadGrades = useCallback(async () => {
@@ -42,17 +34,13 @@ export default function GradesPage() {
             if (dbError) throw dbError
             if (data) setGrades(data)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load grades')
+            setError(err instanceof Error ? err.message : 'Не удалось загрузить')
         } finally {
             setLoading(false)
         }
     }, [user])
 
-    useEffect(() => {
-        if (user) {
-            loadGrades()
-        }
-    }, [user, loadGrades])
+    useEffect(() => { if (user) loadGrades() }, [user, loadGrades])
 
     async function handleAddGrade(e: React.FormEvent) {
         e.preventDefault()
@@ -63,17 +51,14 @@ export default function GradesPage() {
                 student_id: user!.id,
                 subject,
                 score: parseInt(score),
-                semester
+                semester,
             })
             if (createError) throw createError
-            // Bug 4.2: functional update prevents stale closure when two
-            // grades are added in rapid succession
             if (data) {
                 setGrades(prev => [data as Grade, ...prev])
-                setSubject('')
-                setScore('')
+                setSubject(''); setScore('')
             }
-        } catch (_err) {
+        } catch {
             setGrades(previousGrades)
         } finally {
             setSaving(false)
@@ -86,182 +71,118 @@ export default function GradesPage() {
         try {
             const { error: deleteError } = await deleteGrade(id)
             if (deleteError) throw deleteError
-        } catch (_err) {
+        } catch {
             setGrades(previousGrades)
         }
     }
 
-    function handleAddLesson(lessonData: Omit<Lesson, 'id'>) {
-        const newLesson: Lesson = {
-            ...lessonData,
-            id: Date.now()
-        }
-        setLessons([...lessons, newLesson])
-
-        // Also add to grades for compatibility
-        if (user) {
-            createGrade({
-                student_id: user.id,
-                subject: lessonData.subject,
-                score: lessonData.grade,
-                semester: 'Current Semester'
-            }).then(({ data }) => {
-                // Bug 4.2: functional update here too
-                if (data) {
-                    setGrades(prev => [data as Grade, ...prev])
-                }
-            })
-        }
-    }
-
-    // Calculate GPA from lessons
-    const calculateGPA = () => {
-        if (lessons.length === 0) return 0
-        const totalPoints = lessons.reduce((sum, lesson) => sum + lesson.grade, 0)
-        return Math.round(totalPoints / lessons.length)
-    }
-
-    const gpa = calculateGPA()
-    const averageScore = grades.length > 0
-        ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length)
+    const average = grades.length
+        ? Math.round(grades.reduce((s, g) => s + g.score, 0) / grades.length)
         : 0
 
     return (
-        <div className="min-h-screen bg-background">
-            <div className="max-w-6xl mx-auto px-8 py-12">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-semibold text-foreground">Grades & Schedule</h1>
-                    <p className="text-muted-foreground mt-2">Manage your academic performance and schedule</p>
+        <>
+            <div className="g4" style={{ marginBottom: 18 }}>
+                <div className="p-card cyan">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <BookOpen style={{ width: 16, height: 16, color: 'var(--p-accent)', strokeWidth: 1.75 }} />
+                        <div className="clabel">Всего оценок</div>
+                    </div>
+                    <div className="cvalue">{grades.length}</div>
                 </div>
-
-                {/* Statistics */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
-                    <div className="card p-8">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                                <span className="text-accent">📚</span>
-                            </div>
-                            <div>
-                                <p className="text-sm text-muted-foreground">Total Lessons</p>
-                                <p className="text-3xl font-semibold text-foreground mt-1">{lessons.length}</p>
-                            </div>
-                        </div>
+                <div className="p-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <Target style={{ width: 16, height: 16, color: 'var(--p-fg3)', strokeWidth: 1.75 }} />
+                        <div className="clabel">Средний балл</div>
                     </div>
-                    <div className="card p-8">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                                <span className="text-accent">📊</span>
-                            </div>
-                            <div>
-                                <p className="text-sm text-muted-foreground">Current GPA</p>
-                                <p className={`text-3xl font-semibold mt-1 ${gpa >= 70 ? 'text-success' : gpa >= 50 ? 'text-amber-500' : 'text-danger'}`}>
-                                    {gpa}%
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="card p-8">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                                <span className="text-accent">🎯</span>
-                            </div>
-                            <div>
-                                <p className="text-sm text-muted-foreground">Average Score</p>
-                                <p className={`text-3xl font-semibold mt-1 ${averageScore >= 70 ? 'text-success' : averageScore >= 50 ? 'text-amber-500' : 'text-danger'}`}>
-                                    {averageScore}%
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    <div className="cvalue" style={{ color: gradeColorVar(average) }}>{average || '—'}</div>
                 </div>
-
-                {/* Interactive Calendar */}
-                <div className="mb-12">
-                    <GradesCalendar onAddLesson={handleAddLesson} lessons={lessons} />
+                <div className="p-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <BarChart2 style={{ width: 16, height: 16, color: 'var(--p-fg3)', strokeWidth: 1.75 }} />
+                        <div className="clabel">Лучший балл</div>
+                    </div>
+                    <div className="cvalue">{grades.length ? Math.max(...grades.map(g => g.score)) : '—'}</div>
                 </div>
-
-                {/* Add Grade Form */}
-                <div className="card p-8 mb-12">
-                    <h3 className="text-lg font-semibold text-foreground mb-6">Add New Grade</h3>
-                    <form onSubmit={handleAddGrade} className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                        <input
-                            type="text"
-                            placeholder="Subject"
-                            value={subject}
-                            onChange={(e) => setSubject(e.target.value)}
-                            className="input sm:col-span-2"
-                            required
-                        />
-                        <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            placeholder="Score"
-                            value={score}
-                            onChange={(e) => setScore(e.target.value)}
-                            className="input"
-                            required
-                        />
-                        <select
-                            value={semester}
-                            onChange={(e) => setSemester(e.target.value)}
-                            className="input"
-                        >
-                            <option>Fall 2026</option>
-                            <option>Spring 2026</option>
-                        </select>
-                        <button
-                            type="submit"
-                            disabled={saving}
-                            className="btn-primary sm:col-start-4"
-                        >
-                            {saving ? 'Adding...' : 'Add Grade'}
-                        </button>
-                    </form>
+                <div className="p-card">
+                    <div className="clabel">Текущий семестр</div>
+                    <div className="t-h3" style={{ marginTop: 10 }}>{semester}</div>
                 </div>
-
-                {/* Grades List */}
-                {loading ? (
-                    <div className="text-center py-16 text-muted-foreground">Loading...</div>
-                ) : error ? (
-                    <div className="card p-16 text-center">
-                        <div className="text-danger">
-                            <p className="font-medium text-lg">{error}</p>
-                        </div>
-                    </div>
-                ) : (grades ?? []).length === 0 ? (
-                    <div className="card p-16 text-center">
-                        <div className="text-muted-foreground">
-                            <p className="font-medium text-lg">No grades yet</p>
-                            <p className="text-sm mt-2">Add your first grade above to get started</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="card overflow-hidden">
-                        <div className="divide-y divide-border">
-                            {(grades ?? []).map((grade) => (
-                                <div key={grade.id} className="p-6 flex items-center justify-between gap-6 hover:bg-muted/30 transition-colors duration-200">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-foreground truncate">{grade.subject}</p>
-                                        <p className="text-sm text-muted-foreground">{grade.semester}</p>
-                                    </div>
-                                    <div className="flex items-center gap-6">
-                                        <span className={`text-xl font-semibold min-w-[60px] text-right ${grade.score >= 70 ? 'text-success' : grade.score >= 50 ? 'text-amber-500' : 'text-danger'}`}>
-                                            {grade.score}%
-                                        </span>
-                                        <button
-                                            onClick={() => handleDeleteGrade(grade.id)}
-                                            className="btn-danger text-sm px-4 py-2"
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
-        </div>
+
+            <div className="p-card" style={{ marginBottom: 18 }}>
+                <div className="sec-head"><div className="sec-title">Новая оценка</div></div>
+                <form onSubmit={handleAddGrade}>
+                    <div className="g12" style={{ gap: 12 }}>
+                        <div className="p-field span4" style={{ marginBottom: 0 }}>
+                            <label>Предмет</label>
+                            <input type="text" className="p-inp" value={subject} onChange={e => setSubject(e.target.value)} required />
+                        </div>
+                        <div className="p-field span2" style={{ marginBottom: 0 }}>
+                            <label>Балл</label>
+                            <input type="number" min={0} max={100} className="p-inp" value={score} onChange={e => setScore(e.target.value)} required />
+                        </div>
+                        <div className="p-field span3" style={{ marginBottom: 0 }}>
+                            <label>Семестр</label>
+                            <select className="p-inp" value={semester} onChange={e => setSemester(e.target.value)}>
+                                <option>Spring 2026</option>
+                                <option>Fall 2026</option>
+                            </select>
+                        </div>
+                        <div className="span3" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                            <button type="submit" className="p-btn p-btn-cyan" disabled={saving} style={{ width: '100%', justifyContent: 'center' }}>
+                                <Plus /> {saving ? 'Добавление…' : 'Добавить'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            {loading ? (
+                <div className="p-card t-muted" style={{ textAlign: 'center', padding: 36 }}>Загрузка…</div>
+            ) : error ? (
+                <div className="p-card" style={{ textAlign: 'center', padding: 36 }}>
+                    <div style={{ color: 'var(--p-danger)' }} className="t-label">{error}</div>
+                </div>
+            ) : grades.length === 0 ? (
+                <div className="p-card" style={{ textAlign: 'center', padding: 36 }}>
+                    <div className="t-label">Пока нет оценок</div>
+                    <div className="t-meta" style={{ marginTop: 6 }}>Добавьте первую оценку сверху</div>
+                </div>
+            ) : (
+                <div className="p-card" style={{ padding: 0 }}>
+                    <table className="p-tbl">
+                        <thead>
+                            <tr>
+                                <th>Предмет</th>
+                                <th>Семестр</th>
+                                <th>Балл</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {grades.map(g => (
+                                <tr key={g.id}>
+                                    <td>
+                                        <span style={{ fontWeight: 500, color: 'var(--p-fg1)' }}>{g.subject}</span>
+                                    </td>
+                                    <td><span className="t-muted">{g.semester}</span></td>
+                                    <td>
+                                        <span className="num-display" style={{ fontSize: 'var(--p-t-xl)', color: gradeColorVar(g.score) }}>
+                                            {g.score}
+                                        </span>
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                        <button type="button" className="p-btn p-btn-danger p-btn-sm p-btn-icon" onClick={() => handleDeleteGrade(g.id)} title="Удалить">
+                                            <Trash2 />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </>
     )
 }

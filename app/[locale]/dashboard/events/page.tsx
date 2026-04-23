@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { EventCard, CreateEventModal } from '@/components/ui'
-import Button from '@/components/Button'
+import { Plus, Heart, MessageSquare, Calendar, Clock } from 'lucide-react'
 
 type Event = {
     id: number
@@ -17,85 +16,113 @@ type Event = {
 }
 
 const mockEvents: Event[] = [
-    { id: 1, title: 'Math Final Exam', date: '2026-05-15', time: '09:00', description: 'Room 201 - Don\'t forget your calculator!', type: 'exam', author: 'Prof. Johnson', likes: 12, comments: 5 },
-    { id: 2, title: 'Course Project Due', date: '2026-05-20', time: '23:59', description: 'Submit via LMS. Late submissions will not be accepted.', type: 'homework', author: 'Dr. Smith', likes: 8, comments: 3 },
-    { id: 3, title: 'Open House Day', date: '2026-05-10', time: '14:00', description: 'Come meet our faculty and tour the campus! Free food and drinks provided.', type: 'activity', author: 'Admin Team', likes: 45, comments: 12 },
-    { id: 4, title: 'Spring Break Begins!', date: '2026-05-01', time: '00:00', description: 'Enjoy your well-deserved break! Classes resume on May 9th.', type: 'holiday', author: 'Academic Office', likes: 67, comments: 23 },
-    { id: 5, title: 'Campus Movie Night', date: '2026-04-25', time: '20:00', description: 'Join us for a screening of the latest blockbuster in the auditorium. Popcorn provided!', type: 'social', author: 'Student Council', likes: 89, comments: 34 },
-    { id: 6, title: 'Study Group: Physics Chapter 8', date: '2026-04-22', time: '18:00', description: 'Need help with quantum mechanics? Join our study session in the library.', type: 'social', author: 'Alex Chen', likes: 15, comments: 7 },
+    { id: 1, title: 'Экзамен по математике', date: '2026-05-15', time: '09:00', description: 'Аудитория 201 — не забудьте калькулятор', type: 'exam', author: 'Жанар Мұратқызы', likes: 12, comments: 5 },
+    { id: 2, title: 'Курсовая работа', date: '2026-05-20', time: '23:59', description: 'Сдача через LMS. Поздние сдачи не принимаются.', type: 'homework', author: 'Д-р Смит', likes: 8, comments: 3 },
+    { id: 3, title: 'День открытых дверей', date: '2026-05-10', time: '14:00', description: 'Встреча с преподавателями и тур по кампусу.', type: 'activity', author: 'Admin Team', likes: 45, comments: 12 },
+    { id: 4, title: 'Весенние каникулы!', date: '2026-05-01', time: '00:00', description: 'Занятия возобновляются 9 мая.', type: 'holiday', author: 'Academic Office', likes: 67, comments: 23 },
+    { id: 5, title: 'Кино-ночь', date: '2026-04-25', time: '20:00', description: 'Показ в актовом зале. Попкорн!', type: 'social', author: 'Студ-совет', likes: 89, comments: 34 },
 ]
+
+const TYPE_PILL: Record<Event['type'], string> = {
+    exam: 'danger',
+    homework: 'amber',
+    activity: 'cyan',
+    holiday: 'success',
+    social: 'magenta',
+}
+
+const TYPE_LABEL: Record<Event['type'], string> = {
+    exam: 'Экзамен',
+    homework: 'Дедлайн',
+    activity: 'Событие',
+    holiday: 'Каникулы',
+    social: 'Соц',
+}
 
 export default function EventsPage() {
     const [events, setEvents] = useState<Event[]>(mockEvents)
-    const [showCreateModal, setShowCreateModal] = useState(false)
+    const [showForm, setShowForm] = useState(false)
+    const [form, setForm] = useState({ title: '', date: '', description: '' })
 
-    const handleCreateEvent = (eventData: { title: string; due_date: string; description: string }) => {
-        const [date, time] = eventData.due_date.split('T')
-        const newEvent: Event = {
-            id: Date.now(),
-            title: eventData.title,
-            date,
-            time,
-            description: eventData.description,
-            type: 'social',
-            author: 'You',
-            likes: 0,
-            comments: 0
-        }
-        setEvents([newEvent, ...events])
+    const handleLike = (id: number) => {
+        setEvents(events.map(e => e.id === id ? { ...e, likes: (e.likes ?? 0) + 1 } : e))
     }
 
-    const handleLike = (eventId: number) => {
-        setEvents(events.map(event =>
-            event.id === eventId
-                ? { ...event, likes: (event.likes || 0) + 1 }
-                : event
-        ))
+    const handleCreate = (e: React.FormEvent) => {
+        e.preventDefault()
+        const [date, time] = (form.date || '2026-01-01T00:00').split('T')
+        setEvents([
+            { id: Date.now(), title: form.title, date, time: time ?? '00:00', description: form.description, type: 'social', author: 'Вы', likes: 0, comments: 0 },
+            ...events,
+        ])
+        setForm({ title: '', date: '', description: '' })
+        setShowForm(false)
     }
-
-    const handleComment = (eventId: number) => {
-        // In a real app, this would open a comments modal
-        setEvents(events.map(event =>
-            event.id === eventId
-                ? { ...event, comments: (event.comments || 0) + 1 }
-                : event
-        ))
-    }
-
-
 
     return (
-        <div className="max-w-4xl mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Events</h1>
-                <Button
-                    variant="primary"
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-2"
-                >
-                    <span>+</span>
-                    Create Event
-                </Button>
+        <>
+            <div className="sec-head">
+                <div className="sec-title">События</div>
+                <button type="button" className="p-btn p-btn-cyan p-btn-sm" onClick={() => setShowForm(v => !v)}>
+                    <Plus /> Создать
+                </button>
             </div>
 
-            {/* Events Feed */}
-            <div className="space-y-6">
-                {events.map(event => (
-                    <EventCard
-                        key={event.id}
-                        event={event}
-                        onLike={handleLike}
-                        onComment={handleComment}
-                    />
+            {showForm && (
+                <div className="p-card" style={{ marginBottom: 18 }}>
+                    <form onSubmit={handleCreate}>
+                        <div className="g2">
+                            <div className="p-field">
+                                <label>Название</label>
+                                <input className="p-inp" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+                            </div>
+                            <div className="p-field">
+                                <label>Дата и время</label>
+                                <input type="datetime-local" className="p-inp" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
+                            </div>
+                        </div>
+                        <div className="p-field">
+                            <label>Описание</label>
+                            <textarea className="p-inp" rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <button type="button" className="p-btn p-btn-ghost" onClick={() => setShowForm(false)}>Отмена</button>
+                            <button type="submit" className="p-btn p-btn-cyan">Создать событие</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {events.map(ev => (
+                    <div key={ev.id} className="p-card">
+                        <div className="sec-head" style={{ marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                <span className={`pill ${TYPE_PILL[ev.type]}`}>{TYPE_LABEL[ev.type]}</span>
+                                <div className="t-h3" style={{ margin: 0 }}>{ev.title}</div>
+                            </div>
+                            {ev.author && <span className="t-meta">{ev.author}</span>}
+                        </div>
+                        <div className="t-body" style={{ marginBottom: 12, color: 'var(--p-fg3)' }}>{ev.description}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} className="p-num t-meta">
+                                <Calendar style={{ width: 13, height: 13 }} /> {ev.date}
+                            </div>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} className="p-num t-meta">
+                                <Clock style={{ width: 13, height: 13 }} /> {ev.time}
+                            </div>
+                            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                                <button type="button" className="p-btn p-btn-ghost p-btn-sm" onClick={() => handleLike(ev.id)}>
+                                    <Heart /> <span className="p-num">{ev.likes ?? 0}</span>
+                                </button>
+                                <button type="button" className="p-btn p-btn-ghost p-btn-sm">
+                                    <MessageSquare /> <span className="p-num">{ev.comments ?? 0}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 ))}
             </div>
-
-            {/* Create Event Modal */}
-            <CreateEventModal
-                isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
-                onCreate={handleCreateEvent}
-            />
-        </div>
+        </>
     )
 }

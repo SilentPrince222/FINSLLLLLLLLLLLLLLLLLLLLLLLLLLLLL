@@ -3,36 +3,47 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { toast } from 'sonner'
-import { useAuth, signOut } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { createGrade } from '@/lib/database'
 import { SEMESTER, SUBJECTS } from '@/lib/constants'
 import type { Database } from '@/types/database'
+import PortalShell from '@/components/portal/PortalShell'
+import { Check, TrendingUp } from 'lucide-react'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
+
+function initials(name: string | null | undefined): string {
+  if (!name) return '??'
+  return name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('')
+}
+
+function gradeColorVar(score: number): string {
+  if (score >= 85) return 'var(--p-success)'
+  if (score >= 70) return 'var(--p-amber)'
+  return 'var(--p-danger)'
+}
 
 export default function TeacherDashboard() {
     const router = useRouter()
     const { user, role, loading } = useAuth()
 
     const [students, setStudents] = useState<Profile[]>([])
-    const [selectedStudent, setSelectedStudent] = useState<string | null>(null)
     const [selectedSubject, setSelectedSubject] = useState<string>(SUBJECTS[0])
-    const [newScore, setNewScore] = useState('')
-    const [comment, setComment] = useState('')
-    // Track which student id is currently saving so parallel submits can't race
+    const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({})
     const [savingId, setSavingId] = useState<string | null>(null)
     const [loadingStudents, setLoadingStudents] = useState(true)
 
-    // Route guard — redirect non-teachers to their dashboard
     useEffect(() => {
         if (loading) return
         if (!user) { router.push('/auth/login'); return }
         if (role && role !== 'teacher') { router.push('/dashboard'); return }
     }, [loading, user, role, router])
 
+    const effectiveRole = role ?? ((user?.user_metadata as { role?: string } | undefined)?.role ?? null)
+
     useEffect(() => {
-        if (!user || role !== 'teacher') return
+        if (!user || effectiveRole !== 'teacher') return
         let cancelled = false
         ;(async () => {
             setLoadingStudents(true)
@@ -42,30 +53,26 @@ export default function TeacherDashboard() {
                 .eq('role', 'student')
                 .order('full_name')
             if (cancelled) return
-            if (error) {
-                toast.error('Не удалось загрузить студентов')
-            } else {
-                setStudents((data ?? []) as Profile[])
-            }
+            if (error) toast.error('Не удалось загрузить студентов')
+            else setStudents((data ?? []) as Profile[])
             setLoadingStudents(false)
         })()
         return () => { cancelled = true }
-    }, [user, role])
+    }, [user, effectiveRole])
 
-    if (loading || !user || role !== 'teacher') {
-        return <div className="flex items-center justify-center min-h-screen">Загрузка...</div>
+    if (loading || !user) {
+        return (
+            <PortalShell role="teacher" title="Панель преподавателя">
+                <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
+            </PortalShell>
+        )
     }
+    if (effectiveRole && effectiveRole !== 'teacher') return null
 
-    const getGradeColor = (score: number) => {
-        if (score >= 85) return 'text-green-600'
-        if (score >= 70) return 'text-yellow-600'
-        return 'text-red-600'
-    }
-
-    async function handleAddGrade(studentId: string) {
-        // Reject if any save is already in flight for any student
+    async function handleSave(studentId: string) {
         if (savingId) return
-        const score = parseInt(newScore, 10)
+        const raw = scoreDrafts[studentId] ?? ''
+        const score = parseInt(raw, 10)
         if (!Number.isFinite(score) || score < 0 || score > 100) {
             toast.error('Оценка должна быть от 0 до 100')
             return
@@ -73,122 +80,161 @@ export default function TeacherDashboard() {
         setSavingId(studentId)
         const { data, error } = await createGrade({
             student_id: studentId,
-            teacher_id: user!.id,  // RLS rejects if this lies
+            teacher_id: user!.id,
             subject: selectedSubject,
             score,
             semester: SEMESTER,
-            comment: comment.trim() || null,
+            comment: null,
         })
         setSavingId(null)
-
-        // createGrade returns { data: null, error: null } on PGRST116 — treat as failure
-        if (error || !data) {
-            toast.error('Не удалось сохранить оценку')
-            return
-        }
-        toast.success(`Оценка ${score} сохранена (${selectedSubject})`)
-        setNewScore('')
-        setComment('')
+        if (error || !data) { toast.error('Не удалось сохранить оценку'); return }
+        toast.success(`Оценка ${score} (${selectedSubject})`)
+        setScoreDrafts(prev => ({ ...prev, [studentId]: '' }))
     }
 
+    const totalStudents = students.length
+    const averageScore = students.length
+        ? Math.round((students.reduce((s, p) => s + (p.attendance_rate ?? 0), 0) / students.length) * 10) / 10
+        : 0
+
+    const teacherName = (user.user_metadata as any)?.full_name ?? 'Преподаватель'
+
     return (
-        <div className="max-w-7xl mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Панель преподавателя</h1>
-                <button
-                    onClick={() => { router.push('/auth/login'); signOut() }}
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                    Выход
-                </button>
+        <PortalShell role="teacher" title="Панель преподавателя" userName={teacherName} userSub="Преподаватель · КТИ">
+            {/* Top stats */}
+            <div className="g12" style={{ marginBottom: 18 }}>
+                <div className="p-card magenta span3">
+                    <div className="clabel">Мои студенты</div>
+                    <div className="cvalue">{totalStudents}</div>
+                    <div className="cdelta">Активных</div>
+                </div>
+                <div className="p-card span3">
+                    <div className="clabel">Ср. посещаемость</div>
+                    <div className="cvalue">{averageScore || '—'}<span style={{ color: 'var(--p-fg4)' }}>%</span></div>
+                    <div className="cdelta up"><TrendingUp /> По всем группам</div>
+                </div>
+                <div className="p-card span3">
+                    <div className="clabel">Семестр</div>
+                    <div className="t-h3" style={{ marginTop: 10 }}>{SEMESTER}</div>
+                    <div className="p-num t-meta" style={{ marginTop: 8 }}>Неделя 14 из 18</div>
+                    <div className="bar-track" style={{ marginTop: 10 }}><div className="bar-fill m" style={{ width: '77%' }} /></div>
+                </div>
+                <div className="p-card span3">
+                    <div className="clabel">Предметов</div>
+                    <div className="cvalue">{SUBJECTS.length}</div>
+                    <div className="cdelta">В работе</div>
+                </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white rounded-lg shadow">
-                    <div className="p-4 border-b">
-                        <h2 className="font-semibold">Студенты ({students.length})</h2>
+            <div className="g12">
+                {/* Журнал оценок */}
+                <div className="p-card span8">
+                    <div className="sec-head">
+                        <div className="sec-title">Журнал оценок</div>
+                        <select
+                            className="p-inp"
+                            style={{ width: 'auto', padding: '8px 12px' }}
+                            value={selectedSubject}
+                            onChange={e => setSelectedSubject(e.target.value)}
+                        >
+                            {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
                     </div>
-                    {loadingStudents ? (
-                        <div className="p-8 text-center text-gray-500">Загрузка студентов...</div>
-                    ) : students.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">Студентов нет. Запусти `npm run seed`.</div>
-                    ) : (
-                        <div className="divide-y">
-                            {students.map(student => (
-                                <div key={student.id} className="p-4 hover:bg-gray-50">
-                                    <div className="flex justify-between items-center">
-                                        <div
-                                            className="flex-1 cursor-pointer"
-                                            onClick={() => setSelectedStudent(selectedStudent === student.id ? null : student.id)}
-                                        >
-                                            <div className="font-medium">{student.full_name ?? student.email}</div>
-                                            <div className="text-sm text-gray-500">
-                                                {student.group_name ?? '—'} · Посещ: {student.attendance_rate ?? '—'}%
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    {selectedStudent === student.id && (
-                                        <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
-                                            <div className="flex gap-3 flex-wrap">
-                                                <select
-                                                    value={selectedSubject}
-                                                    onChange={e => setSelectedSubject(e.target.value)}
-                                                    className="p-2 border rounded"
-                                                >
-                                                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                                </select>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    max={100}
-                                                    value={newScore}
-                                                    onChange={e => setNewScore(e.target.value)}
-                                                    placeholder="Оценка"
-                                                    className="p-2 border rounded w-28"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={comment}
-                                                    onChange={e => setComment(e.target.value)}
-                                                    placeholder="Комментарий (необязательно)"
-                                                    maxLength={200}
-                                                    className="p-2 border rounded flex-1 min-w-[200px]"
-                                                />
-                                                <button
-                                                    onClick={() => handleAddGrade(student.id)}
-                                                    disabled={savingId !== null || !newScore}
-                                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                                                >
-                                                    {savingId === student.id ? '...' : 'Добавить'}
-                                                </button>
-                                            </div>
-                                            <div className={`text-sm ${getGradeColor(parseInt(newScore || '0', 10))}`}>
-                                                {newScore ? `Будет сохранено: ${newScore}%` : ' '}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                    {loadingStudents ? (
+                        <div className="t-muted" style={{ padding: 36, textAlign: 'center' }}>Загрузка…</div>
+                    ) : students.length === 0 ? (
+                        <div className="t-muted" style={{ padding: 36, textAlign: 'center' }}>
+                            Студентов нет. Запусти `npm run seed`.
+                        </div>
+                    ) : (
+                        <div style={{ maxHeight: 440, overflowY: 'auto', overflowX: 'auto', margin: '0 -14px' }}>
+                            <table className="p-tbl">
+                                <thead>
+                                    <tr>
+                                        <th>Студент</th>
+                                        <th>Группа</th>
+                                        <th>Посещ.</th>
+                                        <th>Выставить</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {students.map(s => {
+                                        const attendance = s.attendance_rate ?? 0
+                                        const color = gradeColorVar(attendance)
+                                        return (
+                                            <tr key={s.id}>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                                                        <div className="av" style={{ width: 28, height: 28 }}>{initials(s.full_name)}</div>
+                                                        <span style={{ fontWeight: 500, color: 'var(--p-fg1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {s.full_name ?? s.email}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td><span className="pill">{s.group_name ?? '—'}</span></td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        <span className="p-num" style={{ color, minWidth: 28 }}>{attendance}</span>
+                                                        <div className="bar-track" style={{ width: 72, marginTop: 0 }}>
+                                                            <div className="bar-fill" style={{ width: `${attendance}%`, background: color }} />
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap' }}>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            max={100}
+                                                            value={scoreDrafts[s.id] ?? ''}
+                                                            onChange={e => setScoreDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
+                                                            className="p-inp"
+                                                            style={{ width: 64, padding: '6px 10px', textAlign: 'center' }}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            className="p-btn p-btn-cyan p-btn-sm p-btn-icon"
+                                                            onClick={() => handleSave(s.id)}
+                                                            disabled={savingId === s.id || !scoreDrafts[s.id]}
+                                                            title="Сохранить"
+                                                        >
+                                                            <Check />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
 
-                <div className="space-y-4">
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <h3 className="font-semibold mb-3">Семестр</h3>
-                        <div className="text-sm text-gray-600">{SEMESTER}</div>
-                    </div>
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <h3 className="font-semibold mb-3">Предметы</h3>
-                        <div className="space-y-2">
-                            {SUBJECTS.map(s => (
-                                <div key={s} className="p-2 bg-gray-50 rounded text-sm">{s}</div>
+                {/* Sidebar */}
+                <div className="span4" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div className="p-card">
+                        <div className="sec-head"><div className="sec-title">Предметы</div></div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {SUBJECTS.map((s, i) => (
+                                <div key={s} className="slot" style={{ marginBottom: 0 }}>
+                                    <div className="slot-body">
+                                        <div className="slot-subj">{s}</div>
+                                    </div>
+                                    <span className={`pill ${i === 0 ? 'magenta' : ''}`}>ИС-22</span>
+                                </div>
                             ))}
                         </div>
                     </div>
+                    <div className="p-card">
+                        <div className="clabel">Семестр</div>
+                        <div className="t-h3" style={{ marginTop: 10 }}>{SEMESTER}</div>
+                        <div className="p-num t-meta" style={{ marginTop: 6 }}>Неделя 14 из 18</div>
+                        <div className="bar-track" style={{ marginTop: 10 }}><div className="bar-fill m" style={{ width: '77%' }} /></div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PortalShell>
     )
 }

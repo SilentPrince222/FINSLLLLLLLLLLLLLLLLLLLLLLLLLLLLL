@@ -3,17 +3,20 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getTimetable, createTimetableEntry, deleteTimetableEntry } from '@/lib/database'
+import { X, Plus } from 'lucide-react'
 import type { Database } from '@/types/database'
 
 type TimetableEntry = Database['public']['Tables']['timetable']['Row']
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const DAYS_RU: Record<string, string> = {
+    Monday: 'Пн', Tuesday: 'Вт', Wednesday: 'Ср', Thursday: 'Чт', Friday: 'Пт', Saturday: 'Сб',
+}
 
 export default function TimetablePage() {
     const { user } = useAuth()
     const [entries, setEntries] = useState<TimetableEntry[]>([])
     const [loading, setLoading] = useState(true)
-
     const [subject, setSubject] = useState('')
     const [day, setDay] = useState('Monday')
     const [startTime, setStartTime] = useState('09:00')
@@ -29,35 +32,18 @@ export default function TimetablePage() {
         setLoading(false)
     }, [user])
 
-    useEffect(() => {
-        if (user) {
-            loadTimetable()
-        }
-    }, [user, loadTimetable])
+    useEffect(() => { if (user) loadTimetable() }, [user, loadTimetable])
 
     async function handleAddEntry(e: React.FormEvent) {
         e.preventDefault()
         setSaving(true)
-
         const { data } = await createTimetableEntry({
-            user_id: user!.id,
-            subject,
-            day,
-            start_time: startTime,
-            end_time: endTime,
-            room: room || null
+            user_id: user!.id, subject, day, start_time: startTime, end_time: endTime, room: room || null,
         })
-
-        // Bug 4.4: functional update to avoid stale closure when two entries
-        // are saved in rapid succession
         if (data) {
-            setEntries(prev =>
-                [...prev, data as TimetableEntry].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day))
-            )
-            setSubject('')
-            setRoom('')
+            setEntries(prev => [...prev, data as TimetableEntry].sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day)))
+            setSubject(''); setRoom('')
         }
-
         setSaving(false)
     }
 
@@ -67,116 +53,83 @@ export default function TimetablePage() {
     }
 
     function getEntriesForDay(dayName: string) {
-        return entries
-            .filter(e => e.day === dayName)
-            .sort((a, b) => a.start_time.localeCompare(b.start_time))
+        return entries.filter(e => e.day === dayName).sort((a, b) => a.start_time.localeCompare(b.start_time))
     }
 
     return (
-        <div className="max-w-5xl mx-auto py-8 px-4">
-            <h1 className="text-2xl font-bold mb-6">Timetable</h1>
-
-            <div className="bg-white p-4 rounded-lg shadow mb-6">
-                <h3 className="font-bold mb-4">Add New Class</h3>
-                <form onSubmit={handleAddEntry} className="flex gap-3 flex-wrap items-end">
-                    <div className="flex-1 min-w-[150px]">
-                        <label className="block text-sm mb-1">Subject</label>
-                        <input
-                            type="text"
-                            value={subject}
-                            onChange={(e) => setSubject(e.target.value)}
-                            className="w-full px-3 py-2 border rounded"
-                            required
-                        />
+        <>
+            <div className="p-card" style={{ marginBottom: 18 }}>
+                <div className="sec-head"><div className="sec-title">Добавить занятие</div></div>
+                <form onSubmit={handleAddEntry}>
+                    <div className="g12" style={{ gap: 12 }}>
+                        <div className="p-field span4" style={{ marginBottom: 0 }}>
+                            <label>Предмет</label>
+                            <input type="text" className="p-inp" value={subject} onChange={e => setSubject(e.target.value)} required />
+                        </div>
+                        <div className="p-field span2" style={{ marginBottom: 0 }}>
+                            <label>День</label>
+                            <select className="p-inp" value={day} onChange={e => setDay(e.target.value)}>
+                                {DAYS.map(d => <option key={d} value={d}>{DAYS_RU[d]}</option>)}
+                            </select>
+                        </div>
+                        <div className="p-field span2" style={{ marginBottom: 0 }}>
+                            <label>Начало</label>
+                            <input type="time" className="p-inp" value={startTime} onChange={e => setStartTime(e.target.value)} required />
+                        </div>
+                        <div className="p-field span2" style={{ marginBottom: 0 }}>
+                            <label>Конец</label>
+                            <input type="time" className="p-inp" value={endTime} onChange={e => setEndTime(e.target.value)} required />
+                        </div>
+                        <div className="p-field span2" style={{ marginBottom: 0 }}>
+                            <label>Ауд.</label>
+                            <input type="text" className="p-inp" value={room} onChange={e => setRoom(e.target.value)} />
+                        </div>
                     </div>
-                    <div className="w-36">
-                        <label className="block text-sm mb-1">Day</label>
-                        <select
-                            value={day}
-                            onChange={(e) => setDay(e.target.value)}
-                            className="w-full px-3 py-2 border rounded"
-                        >
-                            {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                    <div style={{ marginTop: 14 }}>
+                        <button type="submit" className="p-btn p-btn-cyan" disabled={saving}>
+                            <Plus /> {saving ? 'Добавление…' : 'Добавить'}
+                        </button>
                     </div>
-                    <div className="w-28">
-                        <label className="block text-sm mb-1">Start</label>
-                        <input
-                            type="time"
-                            value={startTime}
-                            onChange={(e) => setStartTime(e.target.value)}
-                            className="w-full px-3 py-2 border rounded"
-                            required
-                        />
-                    </div>
-                    <div className="w-28">
-                        <label className="block text-sm mb-1">End</label>
-                        <input
-                            type="time"
-                            value={endTime}
-                            onChange={(e) => setEndTime(e.target.value)}
-                            className="w-full px-3 py-2 border rounded"
-                            required
-                        />
-                    </div>
-                    <div className="w-24">
-                        <label className="block text-sm mb-1">Room</label>
-                        <input
-                            type="text"
-                            value={room}
-                            onChange={(e) => setRoom(e.target.value)}
-                            className="w-full px-3 py-2 border rounded"
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-                    >
-                        {saving ? '...' : 'Add'}
-                    </button>
                 </form>
             </div>
 
             {loading ? (
-                <div>Loading...</div>
+                <div className="p-card t-muted" style={{ textAlign: 'center', padding: 36 }}>Загрузка…</div>
             ) : entries.length === 0 ? (
-                <div className="text-center text-gray-500 py-12 bg-white rounded-lg">No classes scheduled</div>
+                <div className="p-card" style={{ textAlign: 'center', padding: 36 }}>
+                    <div className="t-label">Нет занятий</div>
+                    <div className="t-meta" style={{ marginTop: 6 }}>Добавьте первое занятие сверху</div>
+                </div>
             ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="g3">
                     {DAYS.map(dayName => {
                         const dayEntries = getEntriesForDay(dayName)
                         return (
-                            <div key={dayName} className="bg-white rounded-lg shadow p-4">
-                                <h3 className="font-bold mb-3 border-b pb-2">{dayName}</h3>
+                            <div key={dayName} className="p-card">
+                                <div className="sec-head"><div className="sec-title">{DAYS_RU[dayName]}</div></div>
                                 {dayEntries.length === 0 ? (
-                                    <div className="text-gray-400 text-sm py-2">No classes</div>
+                                    <div className="t-meta" style={{ padding: '8px 0' }}>Нет занятий</div>
                                 ) : (
-                                    <div className="space-y-2">
-                                        {dayEntries.map(entry => (
-                                            <div key={entry.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                                                <div>
-                                                    <div className="font-medium">{entry.subject}</div>
-                                                    <div className="text-sm text-gray-600">
-                                                        {entry.start_time} - {entry.end_time}
-                                                        {entry.room && ` • ${entry.room}`}
-                                                    </div>
+                                    dayEntries.map(entry => (
+                                        <div key={entry.id} className="slot">
+                                            <div className="slot-time">{entry.start_time}</div>
+                                            <div className="slot-body">
+                                                <div className="slot-subj">{entry.subject}</div>
+                                                <div className="slot-sub">
+                                                    {entry.end_time ?? ''}{entry.room ? ` · ${entry.room}` : ''}
                                                 </div>
-                                                <button
-                                                    onClick={() => handleDeleteEntry(entry.id)}
-                                                    className="text-red-600 text-sm px-2"
-                                                >
-                                                    ✕
-                                                </button>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <button type="button" className="p-btn p-btn-danger p-btn-sm p-btn-icon" onClick={() => handleDeleteEntry(entry.id)} title="Удалить">
+                                                <X />
+                                            </button>
+                                        </div>
+                                    ))
                                 )}
                             </div>
                         )
                     })}
                 </div>
             )}
-        </div>
+        </>
     )
 }

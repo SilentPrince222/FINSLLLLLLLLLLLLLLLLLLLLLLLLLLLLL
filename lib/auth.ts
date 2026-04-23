@@ -41,7 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshUser = async () => {
         const { data: { user: current } } = await supabase.auth.getUser()
         setUser(current)
-        setRole(current ? await resolveRole(current.id) : null)
+        if (current) {
+            const r = await resolveRole(current.id)
+            setRole(r ?? ((current.user_metadata as { role?: string } | null)?.role ?? null))
+        } else {
+            setRole(null)
+        }
         setLoading(false)
     }
 
@@ -56,7 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(current)
             if (current) {
                 const r = await resolveRole(current.id)
-                if (mounted) setRole(r)
+                // Fall back to user_metadata.role when profiles table is unreachable
+                const fallback = (current.user_metadata as { role?: string } | null)?.role ?? null
+                if (mounted) setRole(r ?? fallback)
             } else {
                 setRole(null)
             }

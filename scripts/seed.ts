@@ -119,6 +119,12 @@ async function wipeDemoUsers(): Promise<void> {
         .or(`student_id.in.(${demoIds.join(',')}),teacher_id.in.(${demoIds.join(',')})`)
     if (gErr) console.warn(`   (grades pre-wipe warn: ${gErr.message})`)
 
+    const { error: ttErr } = await (supabase.from('timetable') as any).delete().in('user_id', demoIds)
+    if (ttErr) console.warn(`   (timetable pre-wipe warn: ${ttErr.message})`)
+
+    const { error: evErr } = await (supabase.from('events') as any).delete().in('user_id', demoIds)
+    if (evErr) console.warn(`   (events pre-wipe warn: ${evErr.message})`)
+
     const { error: pErr } = await (supabase.from('profiles') as any).delete().in('id', demoIds)
     if (pErr) console.warn(`   (profiles pre-wipe warn: ${pErr.message})`)
 
@@ -227,6 +233,52 @@ async function createStudent(full_name: string, group_name: string): Promise<str
 }
 
 type GradeInsert = Database['public']['Tables']['grades']['Insert']
+type TimetableInsert = Database['public']['Tables']['timetable']['Insert']
+type EventInsert = Database['public']['Tables']['events']['Insert']
+
+// 2 classes/day Mon–Fri — Russian day names so the student dashboard finds them
+const SCHEDULE_IT21: Omit<TimetableInsert, 'user_id'>[] = [
+    { subject: 'Математика',       day: 'Monday',    start_time: '09:00', end_time: '10:30', room: '201' },
+    { subject: 'Физика',           day: 'Monday',    start_time: '11:00', end_time: '12:30', room: '305' },
+    { subject: 'Программирование', day: 'Tuesday',   start_time: '09:00', end_time: '10:30', room: '112' },
+    { subject: 'Ағылшын тілі',    day: 'Tuesday',   start_time: '13:00', end_time: '14:30', room: '203' },
+    { subject: 'История',          day: 'Wednesday', start_time: '09:00', end_time: '10:30', room: '401' },
+    { subject: 'Математика',       day: 'Wednesday', start_time: '11:00', end_time: '12:30', room: '201' },
+    { subject: 'Физика',           day: 'Thursday',  start_time: '13:00', end_time: '14:30', room: '305' },
+    { subject: 'Программирование', day: 'Thursday',  start_time: '15:00', end_time: '16:30', room: '112' },
+    { subject: 'Ағылшын тілі',    day: 'Friday',    start_time: '09:00', end_time: '10:30', room: '203' },
+    { subject: 'История',          day: 'Friday',    start_time: '11:00', end_time: '12:30', room: '401' },
+]
+
+const SCHEDULE_IT22: Omit<TimetableInsert, 'user_id'>[] = [
+    { subject: 'Программирование', day: 'Monday',    start_time: '09:00', end_time: '10:30', room: '112' },
+    { subject: 'История',          day: 'Monday',    start_time: '13:00', end_time: '14:30', room: '401' },
+    { subject: 'Математика',       day: 'Tuesday',   start_time: '09:00', end_time: '10:30', room: '201' },
+    { subject: 'Ағылшын тілі',    day: 'Tuesday',   start_time: '11:00', end_time: '12:30', room: '203' },
+    { subject: 'Физика',           day: 'Wednesday', start_time: '09:00', end_time: '10:30', room: '305' },
+    { subject: 'Программирование', day: 'Wednesday', start_time: '13:00', end_time: '14:30', room: '112' },
+    { subject: 'История',          day: 'Thursday',  start_time: '09:00', end_time: '10:30', room: '401' },
+    { subject: 'Математика',       day: 'Thursday',  start_time: '13:00', end_time: '14:30', room: '201' },
+    { subject: 'Физика',           day: 'Friday',    start_time: '09:00', end_time: '10:30', room: '305' },
+    { subject: 'Ағылшын тілі',    day: 'Friday',    start_time: '13:00', end_time: '14:30', room: '203' },
+]
+
+const EVENT_TEMPLATES: Omit<EventInsert, 'user_id'>[] = [
+    { title: 'Лабораторная по Программированию', due_date: '2026-04-25', type: 'assignment', priority: 'high',   description: 'Лабораторная работа №3 — сдать преподавателю' },
+    { title: 'Контрольная по Математике',         due_date: '2026-04-29', type: 'exam',       priority: 'medium', description: 'Тема: интегральное исчисление' },
+    { title: 'Отчёт по физической лаборатории',  due_date: '2026-05-06', type: 'assignment', priority: 'medium', description: 'Письменный отчёт по лаб. №5' },
+    { title: 'Коллоквиум по Ағылшын тілі',       due_date: '2026-05-13', type: 'exam',       priority: 'low',    description: 'Устный экзамен по разделу 5' },
+    { title: 'Курсовой проект (черновик)',         due_date: '2026-05-20', type: 'assignment', priority: 'high',   description: 'Итоговый проект по специальности' },
+]
+
+function buildTimetable(userId: string, group: string): TimetableInsert[] {
+    const schedule = group === 'IT-21' ? SCHEDULE_IT21 : SCHEDULE_IT22
+    return schedule.map(entry => ({ user_id: userId, ...entry }))
+}
+
+function buildEvents(userId: string): EventInsert[] {
+    return EVENT_TEMPLATES.map(tmpl => ({ user_id: userId, ...tmpl }))
+}
 
 function buildGradesForStudent(studentId: string, teacherIds: string[]): GradeInsert[] {
     // Ability profile stratifies the class — some students strong, some weak.
@@ -273,14 +325,17 @@ async function main() {
 
     console.log('\n3. Creating 30 students...')
     const studentIds: string[] = []
+    const studentGroups = new Map<string, string>()
     for (const name of STUDENTS_IT21) {
         const id = await createStudent(name, 'IT-21')
         studentIds.push(id)
+        studentGroups.set(id, 'IT-21')
         console.log(`   ✓ IT-21: ${emailFor(name)}`)
     }
     for (const name of STUDENTS_IT22) {
         const id = await createStudent(name, 'IT-22')
         studentIds.push(id)
+        studentGroups.set(id, 'IT-22')
         console.log(`   ✓ IT-22: ${emailFor(name)}`)
     }
 
@@ -301,7 +356,27 @@ async function main() {
     }
     console.log(`   ✓ ${allGrades.length} grades inserted.`)
 
-    console.log('\n5. Seed complete. Demo credentials:')
+    console.log('\n5. Generating timetable (30 students × 10 slots = 300 rows)...')
+    const allTimetable: TimetableInsert[] = studentIds.flatMap(sid =>
+        buildTimetable(sid, studentGroups.get(sid) ?? 'IT-21')
+    )
+    for (let i = 0; i < allTimetable.length; i += BATCH) {
+        const chunk = allTimetable.slice(i, i + BATCH)
+        const { error } = await (supabase.from('timetable') as any).insert(chunk)
+        if (error) throw error
+    }
+    console.log(`   ✓ ${allTimetable.length} timetable rows inserted.`)
+
+    console.log('\n6. Generating events (30 students × 5 events = 150 rows)...')
+    const allEvents: EventInsert[] = studentIds.flatMap(sid => buildEvents(sid))
+    for (let i = 0; i < allEvents.length; i += BATCH) {
+        const chunk = allEvents.slice(i, i + BATCH)
+        const { error } = await (supabase.from('events') as any).insert(chunk)
+        if (error) throw error
+    }
+    console.log(`   ✓ ${allEvents.length} events inserted.`)
+
+    console.log('\n7. Seed complete. Demo credentials:')
     console.log('   Teacher: teacher@demo.edu  /  demo12345')
     console.log(`   Student: ${emailFor(STUDENTS_IT21[0])}  /  demo12345  (Айдар Алимов)`)
     console.log(`   Student: ${emailFor(STUDENTS_IT22[0])}  /  demo12345  (Арман Бекетов)`)

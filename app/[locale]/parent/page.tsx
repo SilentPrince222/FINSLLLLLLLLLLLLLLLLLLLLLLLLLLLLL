@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
+import PortalShell from '@/components/portal/PortalShell'
+import { Send } from 'lucide-react'
 
 type Child = {
     id: number
@@ -11,28 +14,39 @@ type Child = {
     avgGrade: number
     attendance: number
     grades: { subject: string; score: number; date: string }[]
-    timetable: { subject: string; day: string; time: string }[]
+    timetable: { subject: string; day: string; time: string; room?: string }[]
 }
 
 const mockChild: Child = {
     id: 1,
     name: 'Асель Касымова',
-    group: 'ИС-21',
+    group: 'ИС-21 · 2 курс · KTI Academy',
     avgGrade: 82,
     attendance: 95,
     grades: [
-        { subject: 'Математика', score: 85, date: '2026-04-15' },
-        { subject: 'Физика', score: 78, date: '2026-04-14' },
-        { subject: 'Программирование', score: 90, date: '2026-04-13' },
-        { subject: 'Английский', score: 82, date: '2026-04-12' },
-        { subject: 'Математика', score: 80, date: '2026-04-10' },
+        { subject: 'Математика', score: 85, date: '15 апр' },
+        { subject: 'Физика', score: 78, date: '14 апр' },
+        { subject: 'Программирование', score: 90, date: '13 апр' },
+        { subject: 'Английский язык', score: 82, date: '12 апр' },
+        { subject: 'История Казахстана', score: 76, date: '10 апр' },
     ],
     timetable: [
-        { subject: 'Математика', day: 'Понедельник', time: '09:00' },
-        { subject: 'Физика', day: 'Вторник', time: '11:00' },
-        { subject: 'Программирование', day: 'Среда', time: '14:00' },
-        { subject: 'Английский', day: 'Четверг', time: '10:00' },
+        { subject: 'Математика', day: 'Пн', time: '09:00', room: '312' },
+        { subject: 'Физика', day: 'Вт', time: '11:00', room: '214' },
+        { subject: 'Программирование', day: 'Ср', time: '14:00', room: 'Лаб.2' },
+        { subject: 'Английский язык', day: 'Чт', time: '10:00', room: '108' },
+        { subject: 'История Казахстана', day: 'Пт', time: '13:00', room: '205' },
     ],
+}
+
+function gradeColorVar(score: number): string {
+  if (score >= 85) return 'var(--p-success)'
+  if (score >= 70) return 'var(--p-fg1)'
+  return 'var(--p-amber)'
+}
+
+function initials(name: string): string {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('')
 }
 
 export default function ParentDashboard() {
@@ -40,117 +54,146 @@ export default function ParentDashboard() {
     const { user, role, loading } = useAuth()
     const [child] = useState<Child>(mockChild)
     const [showAllGrades, setShowAllGrades] = useState(false)
+    const [message, setMessage] = useState('')
+
+    const effectiveRole = role ?? ((user?.user_metadata as { role?: string } | undefined)?.role ?? null)
 
     useEffect(() => {
-        if (!loading && (!user || role !== 'parent')) {
-            router.push('/')
-        }
-    }, [user, role, loading, router])
+        if (loading) return
+        if (!user) { router.push('/auth/login'); return }
+        if (effectiveRole && effectiveRole !== 'parent') { router.push('/dashboard'); return }
+    }, [user, effectiveRole, loading, router])
 
-    if (loading || !user || role !== 'parent') return null
-
-    const getGradeColor = (score: number) => {
-        if (score >= 85) return 'bg-green-100 text-green-700'
-        if (score >= 70) return 'bg-yellow-100 text-yellow-700'
-        return 'bg-red-100 text-red-700'
+    if (loading || !user) {
+        return (
+            <PortalShell role="parent" title="Кабинет родителя">
+                <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
+            </PortalShell>
+        )
     }
+    if (effectiveRole && effectiveRole !== 'parent') return null
 
-    const handleLogout = () => {
-        router.push('/')
+    const visible = showAllGrades ? child.grades : child.grades.slice(0, 3)
+    const parentName = (user.user_metadata as any)?.full_name ?? 'Родитель'
+
+    const sendMessage = () => {
+        if (!message.trim()) return
+        toast.success('Сообщение отправлено куратору')
+        setMessage('')
     }
 
     return (
-        <div className="max-w-5xl mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Панель родителя</h1>
-                <button
-                    onClick={handleLogout}
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                    Выход
-                </button>
-            </div>
-
-            <div className="bg-white rounded-lg shadow mb-6">
-                <div className="p-6 border-b flex items-center gap-4">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-3xl">👤</div>
-                    <div>
-                        <h2 className="text-xl font-semibold">{child.name}</h2>
-                        <p className="text-gray-500">{child.group}</p>
+        <PortalShell role="parent" title="Кабинет родителя" userName={parentName} userSub="Родитель · ИС-21">
+            {/* Child card */}
+            <div className="p-card success" style={{ marginBottom: 18, padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                    <div
+                        className="av"
+                        style={{
+                            width: 56, height: 56, fontSize: 'var(--p-t-md)',
+                            background: 'rgba(134,229,182,0.1)',
+                            border: '1px solid rgba(134,229,182,0.3)',
+                            color: 'var(--p-role-parent)',
+                        }}
+                    >
+                        {initials(child.name)}
+                    </div>
+                    <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+                        <div className="t-h2">{child.name}</div>
+                        <div className="p-num t-meta" style={{ marginTop: 6 }}>{child.group}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <div className="stat-box">
+                            <div className="stat-val" style={{ color: 'var(--p-success)' }}>
+                                {child.avgGrade}<span style={{ color: 'var(--p-fg4)' }}>%</span>
+                            </div>
+                            <div className="stat-lbl">Ср. балл</div>
+                        </div>
+                        <div className="stat-box">
+                            <div className="stat-val" style={{ color: 'var(--p-accent)' }}>
+                                {child.attendance}<span style={{ color: 'var(--p-fg4)' }}>%</span>
+                            </div>
+                            <div className="stat-lbl">Посещ.</div>
+                        </div>
+                        <div className="stat-box">
+                            <div className="stat-val">5</div>
+                            <div className="stat-lbl">Предметов</div>
+                        </div>
                     </div>
                 </div>
-
-                <div className="grid md:grid-cols-3 gap-4 p-6">
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                        <div className="text-3xl font-bold text-blue-600">{child.avgGrade}%</div>
-                        <div className="text-sm text-gray-500">Средний балл</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                        <div className="text-3xl font-bold text-green-600">{child.attendance}%</div>
-                        <div className="text-sm text-gray-500">Посещаемость</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                        <div className="text-3xl font-bold text-purple-600">5</div>
-                        <div className="text-sm text-gray-500">Предметов</div>
-                    </div>
-                </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow">
-                    <div className="p-4 border-b flex justify-between items-center">
-                        <h3 className="font-semibold">Оценки</h3>
-                        <button
-                            onClick={() => setShowAllGrades(!showAllGrades)}
-                            className="text-sm text-blue-600 hover:underline"
-                        >
+            <div className="g12">
+                {/* Grades */}
+                <div className="p-card span5">
+                    <div className="sec-head">
+                        <div className="sec-title">Оценки</div>
+                        <button type="button" className="sec-link" onClick={() => setShowAllGrades(v => !v)}>
                             {showAllGrades ? 'Скрыть' : 'Показать все'}
                         </button>
                     </div>
-                    <div className="p-4">
-                        {(showAllGrades ? child.grades : child.grades.slice(0, 5)).map((grade, i) => (
-                            <div key={i} className="flex justify-between items-center py-2 border-b last:border-0">
-                                <div>
-                                    <div className="font-medium">{grade.subject}</div>
-                                    <div className="text-xs text-gray-400">{grade.date}</div>
+                    <div>
+                        {visible.map((g, i) => (
+                            <div key={i} className="row-item">
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div className="t-label">{g.subject}</div>
+                                    <div className="p-num t-meta" style={{ marginTop: 3 }}>{g.date}</div>
                                 </div>
-                                <span className={`px-3 py-1 rounded-full font-medium ${getGradeColor(grade.score)}`}>
-                                    {grade.score}
-                                </span>
+                                <div className="num-display" style={{ fontSize: 'var(--p-t-xl)', color: gradeColorVar(g.score) }}>
+                                    {g.score}
+                                </div>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow">
-                    <div className="p-4 border-b">
-                        <h3 className="font-semibold">Расписание на неделю</h3>
-                    </div>
-                    <div className="p-4">
-                        {child.timetable.map((t, i) => (
-                            <div key={i} className="flex justify-between items-center py-2 border-b last:border-0">
-                                <div className="font-medium">{t.subject}</div>
-                                <div className="text-sm text-gray-500">{t.day}, {t.time}</div>
+                {/* Timetable */}
+                <div className="p-card span4">
+                    <div className="sec-head"><div className="sec-title">Расписание</div></div>
+                    {child.timetable.map((t, i) => (
+                        <div key={i} className="slot">
+                            <div className="slot-time">{t.day} {t.time}</div>
+                            <div className="slot-body">
+                                <div className="slot-subj">{t.subject}</div>
                             </div>
-                        ))}
-                    </div>
+                            {t.room && <div className="slot-room">{t.room}</div>}
+                        </div>
+                    ))}
                 </div>
-            </div>
 
-            <div className="bg-white rounded-lg shadow mt-6 p-4">
-                <h3 className="font-semibold mb-3">📧 Связаться с преподавателем</h3>
-                <p className="text-sm text-gray-500 mb-3">У вас есть вопросы? Напишите сообщение куратору группы.</p>
-                <div className="flex gap-3">
-                    <input
-                        type="text"
-                        placeholder="Ваше сообщение..."
-                        className="flex-1 p-2 border rounded"
+                {/* Curator message */}
+                <div className="p-card span3">
+                    <div className="sec-head"><div className="sec-title">Куратор</div></div>
+                    <div
+                        style={{
+                            padding: '12px 14px',
+                            borderRadius: 10,
+                            background: 'rgba(255,255,255,0.02)',
+                            border: '1px solid var(--p-border)',
+                            marginBottom: 14,
+                        }}
+                    >
+                        <div className="t-label">Жанар Мұратқызы</div>
+                        <div className="t-meta" style={{ marginTop: 4 }}>Куратор · ИС-21</div>
+                    </div>
+                    <textarea
+                        className="p-inp"
+                        rows={4}
+                        placeholder="Ваше сообщение…"
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        style={{ resize: 'none' }}
                     />
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                        Отправить
+                    <button
+                        type="button"
+                        className="p-btn p-btn-cyan"
+                        onClick={sendMessage}
+                        style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
+                    >
+                        <Send /> Отправить
                     </button>
                 </div>
             </div>
-        </div>
+        </PortalShell>
     )
 }

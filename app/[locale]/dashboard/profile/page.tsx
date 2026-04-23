@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 
 export default function ProfilePage() {
     const [formData, setFormData] = useState({
-        name: 'Иван Иванов',
-        email: 'ivan@example.com',
-        phone: '+7 (999) 123-45-67',
-        group: 'ИС-21',
+        name: 'Айдар Алимов',
+        email: 'aidar.alimov@demo.edu',
+        phone: '+7 (701) 123-45-67',
+        group: 'ИС-22',
         bio: 'Студент факультета информационных технологий. Интересуюсь программированием и искусственным интеллектом.',
         notifications: true,
         emailNotifications: true,
@@ -24,143 +25,95 @@ export default function ProfilePage() {
         setTimeout(() => setSaved(false), 2000)
     }
 
+    const initials = formData.name.split(' ').slice(0, 2).map(s => s[0]).join('')
+
     return (
-        <div className="max-w-3xl mx-auto py-8 px-4">
-            <h1 className="text-2xl font-bold mb-6">Профиль</h1>
-
-            <div className="grid md:grid-cols-3 gap-6">
-                <div className="md:col-span-1">
-                    <div className="bg-white rounded-lg shadow p-6 text-center">
-                        <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-4xl">
-                            👤
-                        </div>
-                        <h2 className="text-lg font-semibold">{formData.name}</h2>
-                        <p className="text-gray-500">{formData.group}</p>
-                        <button className="mt-4 text-sm text-blue-600 hover:underline">
-                            Сменить фото
-                        </button>
+        <div className="g12">
+            <div className="span4" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div className="p-card" style={{ textAlign: 'center', padding: 28 }}>
+                    <div
+                        className="av"
+                        style={{
+                            width: 88, height: 88, fontSize: 22,
+                            background: 'rgba(110,231,245,0.1)',
+                            border: '1px solid rgba(110,231,245,0.3)',
+                            color: 'var(--p-accent)',
+                            margin: '0 auto 14px',
+                        }}
+                    >
+                        {initials}
                     </div>
-
-                    <div className="bg-white rounded-lg shadow p-4 mt-4">
-                        <h3 className="font-medium mb-3">Статистика</h3>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Средний балл</span>
-                                <span className="font-medium">82%</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Предметов</span>
-                                <span className="font-medium">8</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Событий</span>
-                                <span className="font-medium">4</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">В системе с</span>
-                                <span className="font-medium">Сен 2025</span>
-                            </div>
-                        </div>
-                    </div>
+                    <div className="t-h3">{formData.name}</div>
+                    <div className="p-num t-meta" style={{ marginTop: 6 }}>{formData.group}</div>
+                    <button type="button" className="p-btn p-btn-ghost p-btn-sm" style={{ marginTop: 14 }}>
+                        Сменить фото
+                    </button>
                 </div>
 
-                <div className="md:col-span-2">
-                    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-4">
-                        <h3 className="font-medium pb-2 border-b">Основная информация</h3>
-                        
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-gray-500 mb-1">Имя</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                                    className="w-full p-2 border rounded"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-gray-500 mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                    className="w-full p-2 border rounded"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-gray-500 mb-1">Телефон</label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                                    className="w-full p-2 border rounded"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-gray-500 mb-1">Группа</label>
-                                <input
-                                    type="text"
-                                    value={formData.group}
-                                    onChange={(e) => setFormData({...formData, group: e.target.value})}
-                                    className="w-full p-2 border rounded"
-                                />
-                            </div>
-                        </div>
+                <div className="p-card">
+                    <div className="sec-head"><div className="sec-title">Статистика</div></div>
+                    <div className="row-item"><span className="t-meta">Средний балл</span><span className="p-num t-label">82%</span></div>
+                    <div className="row-item"><span className="t-meta">Предметов</span><span className="p-num t-label">8</span></div>
+                    <div className="row-item"><span className="t-meta">Событий</span><span className="p-num t-label">4</span></div>
+                    <div className="row-item"><span className="t-meta">В системе с</span><span className="p-num t-label">Сен 2025</span></div>
+                </div>
+            </div>
 
-                        <div>
-                            <label className="block text-sm text-gray-500 mb-1">О себе</label>
-                            <textarea
-                                value={formData.bio}
-                                onChange={(e) => setFormData({...formData, bio: e.target.value})}
-                                className="w-full p-2 border rounded h-24 resize-none"
-                            />
+            <div className="span8">
+                <form onSubmit={handleSubmit} className="p-card">
+                    <div className="sec-head"><div className="sec-title">Основная информация</div></div>
+                    <div className="g2">
+                        <div className="p-field">
+                            <label>Имя</label>
+                            <input type="text" className="p-inp" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                         </div>
-
-                        <h3 className="font-medium py-2 border-b mt-6">Настройки уведомлений</h3>
-                        
-                        <div className="space-y-3">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={formData.notifications}
-                                    onChange={(e) => setFormData({...formData, notifications: e.target.checked})}
-                                    className="w-4 h-4"
-                                />
-                                <span>Включить уведомления</span>
-                            </label>
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={formData.emailNotifications}
-                                    onChange={(e) => setFormData({...formData, emailNotifications: e.target.checked})}
-                                    className="w-4 h-4"
-                                />
-                                <span>Email уведомления</span>
-                            </label>
+                        <div className="p-field">
+                            <label>Email</label>
+                            <input type="email" className="p-inp" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
                         </div>
-
-                        <div className="flex gap-3 pt-4">
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                            >
-                                {saving ? 'Сохранение...' : 'Сохранить'}
-                            </button>
-                            {saved && (
-                                <span className="py-2 text-green-600">✓ Сохранено</span>
-                            )}
+                        <div className="p-field">
+                            <label>Телефон</label>
+                            <input type="tel" className="p-inp" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
                         </div>
-                    </form>
+                        <div className="p-field">
+                            <label>Группа</label>
+                            <input type="text" className="p-inp" value={formData.group} onChange={e => setFormData({ ...formData, group: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="p-field">
+                        <label>О себе</label>
+                        <textarea className="p-inp" rows={3} value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} />
+                    </div>
 
-                    <div className="bg-white rounded-lg shadow p-6 mt-4">
-                        <h3 className="font-medium pb-2 border-b mb-4">Безопасность</h3>
-                        <button className="text-blue-600 hover:underline">
-                            Сменить пароль
+                    <div className="sec-head" style={{ marginTop: 18 }}><div className="sec-title">Уведомления</div></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={formData.notifications} onChange={e => setFormData({ ...formData, notifications: e.target.checked })} />
+                            <span className="t-label">Включить уведомления</span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={formData.emailNotifications} onChange={e => setFormData({ ...formData, emailNotifications: e.target.checked })} />
+                            <span className="t-label">Email-уведомления</span>
+                        </label>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 20 }}>
+                        <button type="submit" className="p-btn p-btn-cyan" disabled={saving}>
+                            {saving ? 'Сохранение…' : 'Сохранить'}
                         </button>
-                        <button className="ml-4 text-red-600 hover:underline">
-                            Удалить аккаунт
-                        </button>
+                        {saved && (
+                            <span className="p-num t-meta" style={{ color: 'var(--p-success)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <Check style={{ width: 13, height: 13 }} /> Сохранено
+                            </span>
+                        )}
+                    </div>
+                </form>
+
+                <div className="p-card" style={{ marginTop: 18 }}>
+                    <div className="sec-head"><div className="sec-title">Безопасность</div></div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <button type="button" className="p-btn p-btn-ghost p-btn-sm">Сменить пароль</button>
+                        <button type="button" className="p-btn p-btn-danger p-btn-sm">Удалить аккаунт</button>
                     </div>
                 </div>
             </div>

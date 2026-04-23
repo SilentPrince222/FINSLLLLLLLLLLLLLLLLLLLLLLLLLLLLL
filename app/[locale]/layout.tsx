@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono, Instrument_Serif } from "next/font/google";
 import "../globals.css";
 import { ThemeProvider } from 'next-themes';
 import { NextIntlClientProvider } from 'next-intl';
@@ -28,6 +28,14 @@ const jetbrainsMono = JetBrains_Mono({
     weight: ["400", "500", "700"],
 });
 
+const instrumentSerif = Instrument_Serif({
+    subsets: ["latin"],
+    variable: "--font-serif",
+    display: "swap",
+    weight: ["400"],
+    style: ["normal", "italic"],
+});
+
 export const metadata: Metadata = {
     title: "College Portal",
     description: "Система управления образовательным процессом",
@@ -48,7 +56,7 @@ export default async function RootLayout({
 
     return (
         <html lang={locale} suppressHydrationWarning>
-            <body className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen`}>
+            <body className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable} font-sans antialiased min-h-screen`}>
                 <NextIntlClientProvider messages={messages}>
                     <AuthProvider>
                         <SupabaseProvider>

@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { BarChart, LineChart, DonutChart } from '@/components/charts'
 
 type GradeData = { subject: string; score: number; date: string }
-type AttendanceData = { month: string; percent: number }
 
 const mockGrades: GradeData[] = [
     { subject: 'Математика', score: 85, date: '2026-01' },
@@ -25,171 +23,120 @@ const mockGrades: GradeData[] = [
     { subject: 'Английский', score: 84, date: '2026-04' },
 ]
 
-const mockAttendance: AttendanceData[] = [
-    { month: 'Сен', percent: 95 },
-    { month: 'Окт', percent: 92 },
-    { month: 'Ноя', percent: 88 },
-    { month: 'Дек', percent: 85 },
-    { month: 'Янв', percent: 90 },
-    { month: 'Фев', percent: 93 },
-    { month: 'Мар', percent: 96 },
-    { month: 'Апр', percent: 94 },
+const mockAttendance = [
+    { month: 'Сен', percent: 95 }, { month: 'Окт', percent: 92 }, { month: 'Ноя', percent: 88 },
+    { month: 'Дек', percent: 85 }, { month: 'Янв', percent: 90 }, { month: 'Фев', percent: 93 },
+    { month: 'Мар', percent: 96 }, { month: 'Апр', percent: 94 },
 ]
 
 const subjects = ['Математика', 'Физика', 'Программирование', 'Английский']
-const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн']
-const monthMap: Record<string, string> = {
-    'Янв': '01', 'Фев': '02', 'Мар': '03', 'Апр': '04', 'Май': '05', 'Июн': '06',
-    'Июл': '07', 'Авг': '08', 'Сен': '09', 'Окт': '10', 'Ноя': '11', 'Дек': '12',
+
+const subjectAccents: Record<string, string> = {
+    'Математика': 'var(--p-accent)',
+    'Физика': 'var(--p-role-teacher)',
+    'Программирование': 'var(--p-success)',
+    'Английский': 'var(--p-amber)',
 }
 
 export default function AnalyticsPage() {
     const [period, setPeriod] = useState('4')
-    
-    const subjectAverages = subjects.map(subject => {
-        const grades = mockGrades.filter(g => g.subject === subject)
-        return {
-            label: subject,
-            value: Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length)
-        }
+
+    const subjectAverages = subjects.map(s => {
+        const grades = mockGrades.filter(g => g.subject === s)
+        return { label: s, value: Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length) }
     })
-    
+
     const totalAvg = Math.round(subjectAverages.reduce((sum, s) => sum + s.value, 0) / subjectAverages.length)
-    
-    const progressData = months.slice(0, parseInt(period)).map((month, i) => {
-        const monthNum = monthMap[months[i]]
-        const monthGrades = mockGrades.filter(g => monthNum ? g.date.endsWith(`-${monthNum}`) : false)
-        return {
-            label: month,
-            value: monthGrades.length > 0
-                ? Math.round(monthGrades.reduce((sum, g) => sum + g.score, 0) / monthGrades.length)
-                : 0
-        }
-    })
-
-    const subjectColors = subjects.map((s, i) => {
-        const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b']
-        return { label: s, value: subjectAverages.find(sa => sa.label === s)!.value, color: colors[i] }
-    })
-
-    const getGradeLevel = (avg: number) => {
-        if (avg >= 85) return { label: 'Отлично', color: 'text-green-600' }
-        if (avg >= 70) return { label: 'Хорошо', color: 'text-blue-600' }
-        if (avg >= 50) return { label: 'Средне', color: 'text-yellow-600' }
-        return { label: 'Низко', color: 'text-red-600' }
-    }
-
-    const level = getGradeLevel(totalAvg)
+    const attendanceAvg = Math.round(mockAttendance.reduce((s, a) => s + a.percent, 0) / mockAttendance.length)
+    const maxSubj = Math.max(...subjectAverages.map(s => s.value))
+    const maxAtt = Math.max(...mockAttendance.map(a => a.percent))
 
     return (
-        <div className="max-w-7xl mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Аналитика</h1>
-                <select
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                    className="p-2 border rounded"
-                >
-                    <option value="4">За 4 месяца</option>
-                    <option value="6">За 6 месяцев</option>
-                    <option value="8">За год</option>
+        <>
+            <div className="sec-head">
+                <div className="sec-title">Аналитика</div>
+                <select className="p-inp" style={{ width: 'auto' }} value={period} onChange={e => setPeriod(e.target.value)}>
+                    <option value="4">4 месяца</option>
+                    <option value="6">6 месяцев</option>
+                    <option value="8">Год</option>
                 </select>
             </div>
 
-            <div className="grid md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-sm text-gray-500">Средний балл</div>
-                    <div className="text-3xl font-bold text-blue-600">{totalAvg}%</div>
-                    <div className={`text-sm ${level.color}`}>{level.label}</div>
+            <div className="g4" style={{ marginBottom: 18 }}>
+                <div className="p-card cyan">
+                    <div className="clabel">Средний балл</div>
+                    <div className="cvalue">{totalAvg}<span style={{ color: 'var(--p-fg4)' }}>%</span></div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-sm text-gray-500">Всего оценок</div>
-                    <div className="text-3xl font-bold text-green-600">{mockGrades.length}</div>
-                    <div className="text-sm text-gray-500">за период</div>
+                <div className="p-card">
+                    <div className="clabel">Всего оценок</div>
+                    <div className="cvalue">{mockGrades.length}</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-sm text-gray-500">Посещаемость</div>
-                    <div className="text-3xl font-bold text-purple-600">
-                        {Math.round(mockAttendance.reduce((s, a) => s + a.percent, 0) / mockAttendance.length)}%
-                    </div>
-                    <div className="text-sm text-gray-500">средняя</div>
+                <div className="p-card">
+                    <div className="clabel">Посещаемость</div>
+                    <div className="cvalue">{attendanceAvg}<span style={{ color: 'var(--p-fg4)' }}>%</span></div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-sm text-gray-500">Предметов</div>
-                    <div className="text-3xl font-bold text-orange-600">{subjects.length}</div>
-                    <div className="text-sm text-gray-500">в изучении</div>
+                <div className="p-card">
+                    <div className="clabel">Предметов</div>
+                    <div className="cvalue">{subjects.length}</div>
                 </div>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-6 mb-6">
-                <div className="bg-white rounded-lg shadow p-4">
-                    <h3 className="font-semibold mb-4">Прогресс по месяцам</h3>
-                    <LineChart data={progressData} />
-                </div>
-
-                <div className="bg-white rounded-lg shadow p-4">
-                    <h3 className="font-semibold mb-4">Оценки по предметам</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <BarChart data={subjectAverages} />
-                        <div className="space-y-2">
-                            {subjectColors.map((s, i) => (
-                                <div key={i} className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
-                                        <span className="text-sm">{s.label}</span>
-                                    </div>
-                                    <span className="font-medium">{s.value}%</span>
+            <div className="g12" style={{ marginBottom: 18 }}>
+                <div className="p-card span6">
+                    <div className="sec-head"><div className="sec-title">Оценки по предметам</div></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        {subjectAverages.map(s => (
+                            <div key={s.label}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span className="t-label">{s.label}</span>
+                                    <span className="p-num t-label" style={{ color: subjectAccents[s.label] }}>{s.value}%</span>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid lg:grid-cols-3 gap-6">
-                <div className="bg-white rounded-lg shadow p-4">
-                    <h3 className="font-semibold mb-4">Распределение оценок</h3>
-                    <DonutChart data={subjectColors} />
-                    <div className="mt-4 space-y-2">
-                        {subjectColors.map((s, i) => (
-                            <div key={i} className="flex justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
-                                    <span className="text-sm">{s.label}</span>
+                                <div className="bar-track" style={{ height: 6 }}>
+                                    <div className="bar-fill" style={{ width: `${(s.value / maxSubj) * 100}%`, background: subjectAccents[s.label] }} />
                                 </div>
-                                <span className="text-sm">{s.value}%</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow p-4 lg:col-span-2">
-                    <h3 className="font-semibold mb-4">Посещаемость по месяцам</h3>
-                    <BarChart data={mockAttendance.map(m => ({ label: m.month, value: m.percent }))} />
+                <div className="p-card span6">
+                    <div className="sec-head"><div className="sec-title">Посещаемость по месяцам</div></div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 160 }}>
+                        {mockAttendance.map(m => (
+                            <div key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        height: `${(m.percent / maxAtt) * 100}%`,
+                                        background: 'var(--p-accent)',
+                                        borderRadius: 4,
+                                        opacity: 0.85,
+                                    }}
+                                />
+                                <span className="t-meta">{m.month}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-4 mt-6">
-                <h3 className="font-semibold mb-4">Рекомендации</h3>
-                <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg">
-                        <div className="font-medium text-green-700">Сильные стороны</div>
-                        <ul className="mt-2 text-sm space-y-1">
-                            <li>✓ Программирование - ваш лучший предмет ({subjectAverages.find(s => s.label === 'Программирование')?.value}%)</li>
-                            <li>✓ Стабильная посещаемость</li>
-                            <li>✓ Хороший прогресс в математике</li>
-                        </ul>
+            <div className="g2">
+                <div className="p-card success">
+                    <div className="sec-head"><div className="sec-title">Сильные стороны</div></div>
+                    <div className="row-item">
+                        <span className="t-label">Программирование — ваш лучший предмет</span>
+                        <span className="pill success">{subjectAverages.find(s => s.label === 'Программирование')?.value}%</span>
                     </div>
-                    <div className="p-4 bg-yellow-50 rounded-lg">
-                        <div className="font-medium text-yellow-700">Рекомендации</div>
-                        <ul className="mt-2 text-sm space-y-1">
-                            <li>→ Уделить больше внимания физике</li>
-                            <li>→ Стабильнее посещать занятия в ноябре-декабре</li>
-                            <li>→ Подтянуть английский язык</li>
-                        </ul>
-                    </div>
+                    <div className="row-item"><span className="t-label">Стабильная посещаемость</span></div>
+                    <div className="row-item"><span className="t-label">Хороший прогресс в математике</span></div>
+                </div>
+                <div className="p-card amber">
+                    <div className="sec-head"><div className="sec-title">Рекомендации</div></div>
+                    <div className="row-item"><span className="t-label">Уделить больше внимания физике</span></div>
+                    <div className="row-item"><span className="t-label">Стабильнее посещать занятия</span></div>
+                    <div className="row-item"><span className="t-label">Подтянуть английский язык</span></div>
                 </div>
             </div>
-        </div>
+        </>
     )
 }

@@ -3,29 +3,40 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
+import PortalShell from '@/components/portal/PortalShell'
+import { TrendingUp, Plus, Search, Pencil, Trash2 } from 'lucide-react'
+
+type Role = 'student' | 'teacher' | 'parent' | 'admin'
 
 type User = {
     id: number
     name: string
     email: string
-    role: 'student' | 'teacher' | 'parent' | 'admin'
+    role: Role
     group?: string
     status: 'active' | 'inactive'
 }
 
 const mockUsers: User[] = [
-    { id: 1, name: 'Айдар Алимов', email: 'aidar.alimov@demo.edu', role: 'student', group: 'IT-21', status: 'active' },
-    { id: 2, name: 'Айгерим Серикбаева', email: 'aigerim.serikbaeva@demo.edu', role: 'student', group: 'IT-21', status: 'active' },
-    { id: 3, name: 'Жанар Мұратқызы', email: 'teacher@demo.edu', role: 'teacher', status: 'active' },
-    { id: 4, name: 'Асель Касымова', email: 'asel.kasymova@demo.edu', role: 'parent', status: 'active' },
-    { id: 5, name: 'Әкімші', email: 'admin@demo.edu', role: 'admin', status: 'active' },
+    { id: 1, name: 'Айдар Алимов', email: 'aidar.alimov@demo.edu', role: 'student', group: 'ИС-22', status: 'active' },
+    { id: 2, name: 'Айгерим Серикбаева', email: 'aigerim.s@demo.edu', role: 'student', group: 'ИС-22', status: 'active' },
+    { id: 3, name: 'Болат Нұрмағамбет', email: 'bolat@demo.edu', role: 'student', group: 'ИС-22', status: 'active' },
+    { id: 4, name: 'Жанар Мұратқызы', email: 'teacher@demo.edu', role: 'teacher', status: 'active' },
+    { id: 5, name: 'Асель Касымова', email: 'asel.kasymova@demo.edu', role: 'parent', status: 'active' },
+    { id: 6, name: 'Нурлан Сейтжан', email: 'admin@demo.edu', role: 'admin', status: 'active' },
+    { id: 7, name: 'Дана Абенова', email: 'dana@demo.edu', role: 'teacher', status: 'inactive' },
 ]
 
-const roleLabels: Record<User['role'], { label: string; color: string }> = {
-    student: { label: 'Студент', color: 'bg-blue-100 text-blue-700' },
-    teacher: { label: 'Преподаватель', color: 'bg-purple-100 text-purple-700' },
-    parent: { label: 'Родитель', color: 'bg-green-100 text-green-700' },
-    admin: { label: 'Админ', color: 'bg-red-100 text-red-700' },
+type RoleMeta = { label: string; pill: string; bg: string; border: string; color: string }
+const ROLE_META: Record<Role, RoleMeta> = {
+    student: { label: 'Студент', pill: 'cyan', bg: 'rgba(110,231,245,0.06)', border: 'rgba(110,231,245,0.28)', color: 'var(--p-accent)' },
+    teacher: { label: 'Преподаватель', pill: 'magenta', bg: 'rgba(199,168,255,0.06)', border: 'rgba(199,168,255,0.28)', color: 'var(--p-role-teacher)' },
+    parent: { label: 'Родитель', pill: 'success', bg: 'rgba(134,229,182,0.06)', border: 'rgba(134,229,182,0.28)', color: 'var(--p-role-parent)' },
+    admin: { label: 'Администратор', pill: 'amber', bg: 'rgba(233,196,139,0.06)', border: 'rgba(233,196,139,0.28)', color: 'var(--p-role-admin)' },
+}
+
+function initials(name: string): string {
+    return name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('')
 }
 
 export default function AdminDashboard() {
@@ -36,17 +47,27 @@ export default function AdminDashboard() {
     const [showAddModal, setShowAddModal] = useState(false)
     const [search, setSearch] = useState('')
 
-    useEffect(() => {
-        if (!loading && (!user || role !== 'admin')) {
-            router.push('/')
-        }
-    }, [user, role, loading, router])
+    const effectiveRole = role ?? ((user?.user_metadata as { role?: string } | undefined)?.role ?? null)
 
-    if (loading || !user || role !== 'admin') return null
+    useEffect(() => {
+        if (loading) return
+        if (!user) { router.push('/auth/login'); return }
+        if (effectiveRole && effectiveRole !== 'admin') { router.push('/dashboard'); return }
+    }, [user, effectiveRole, loading, router])
+
+    if (loading || !user) {
+        return (
+            <PortalShell role="admin" title="Админ-панель">
+                <div style={{ padding: 48, textAlign: 'center' }} className="t-muted">Загрузка…</div>
+            </PortalShell>
+        )
+    }
+    if (effectiveRole && effectiveRole !== 'admin') return null
 
     const filteredUsers = users.filter(u => {
         if (filter !== 'all' && u.role !== filter) return false
-        if (search && !u.name.toLowerCase().includes(search.toLowerCase()) && !u.email.toLowerCase().includes(search.toLowerCase())) return false
+        if (search && !u.name.toLowerCase().includes(search.toLowerCase())
+            && !u.email.toLowerCase().includes(search.toLowerCase())) return false
         return true
     })
 
@@ -58,161 +79,184 @@ export default function AdminDashboard() {
     }
 
     const deleteUser = (id: number) => {
-        if (confirm('Удалить пользователя?')) {
-            setUsers(users.filter(u => u.id !== id))
-        }
+        if (confirm('Удалить пользователя?')) setUsers(users.filter(u => u.id !== id))
     }
 
+    const adminName = (user.user_metadata as any)?.full_name ?? 'Администратор'
+
     return (
-        <div className="max-w-7xl mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Админ-панель</h1>
-                <button
-                    onClick={() => router.push('/')}
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                    Выход
-                </button>
-            </div>
-
-            <div className="grid md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-                    <div className="text-sm text-gray-500">Всего пользователей</div>
+        <PortalShell role="admin" title="Админ-панель" userName={adminName} userSub="Администратор · CMS">
+            {/* Stat cards */}
+            <div className="g4" style={{ marginBottom: 18 }}>
+                <div className="p-card cyan">
+                    <div className="clabel">Всего пользователей</div>
+                    <div className="cvalue">{stats.total}</div>
+                    <div className="cdelta up"><TrendingUp /> +42 за семестр</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-3xl font-bold text-green-600">{stats.students}</div>
-                    <div className="text-sm text-gray-500">Студентов</div>
+                <div className="p-card">
+                    <div className="clabel">Студентов</div>
+                    <div className="cvalue">{stats.students}</div>
+                    <div className="cdelta">4 специальности</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-3xl font-bold text-purple-600">{stats.teachers}</div>
-                    <div className="text-sm text-gray-500">Преподавателей</div>
+                <div className="p-card">
+                    <div className="clabel">Преподавателей</div>
+                    <div className="cvalue">{stats.teachers}</div>
+                    <div className="cdelta up"><TrendingUp /> +3 в семестре</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <div className="text-3xl font-bold text-yellow-600">{stats.parents}</div>
-                    <div className="text-sm text-gray-500">Родителей</div>
+                <div className="p-card">
+                    <div className="clabel">Родителей</div>
+                    <div className="cvalue">{stats.parents}</div>
+                    <div className="cdelta">Активных аккаунтов</div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow">
-                <div className="p-4 border-b flex flex-wrap gap-4 items-center">
-                    <input
-                        type="text"
-                        placeholder="Поиск..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="p-2 border rounded flex-1 min-w-[200px]"
-                    />
+            {/* Users table */}
+            <div className="p-card">
+                <div className="sec-head" style={{ marginBottom: 18 }}>
+                    <div className="sec-title">Управление пользователями</div>
+                    <button type="button" className="p-btn p-btn-cyan p-btn-sm" onClick={() => setShowAddModal(true)}>
+                        <Plus /> Добавить
+                    </button>
+                </div>
+
+                {/* Filters */}
+                <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+                        <Search
+                            style={{
+                                position: 'absolute', left: 12, top: '50%',
+                                transform: 'translateY(-50%)',
+                                width: 14, height: 14,
+                                color: 'var(--p-fg4)', pointerEvents: 'none', strokeWidth: 1.75,
+                            }}
+                        />
+                        <input
+                            className="p-inp"
+                            placeholder="Поиск по имени или email…"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            style={{ paddingLeft: 36 }}
+                        />
+                    </div>
                     <select
+                        className="p-inp"
                         value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="p-2 border rounded"
+                        onChange={e => setFilter(e.target.value)}
+                        style={{ width: 'auto', minWidth: 160 }}
                     >
                         <option value="all">Все роли</option>
                         <option value="student">Студенты</option>
                         <option value="teacher">Преподаватели</option>
                         <option value="parent">Родители</option>
-                        <option value="admin">Админы</option>
+                        <option value="admin">Администраторы</option>
                     </select>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                    >
-                        + Добавить
-                    </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-gray-50">
+                <div style={{ overflowX: 'auto', margin: '0 -14px' }}>
+                    <table className="p-tbl">
+                        <thead>
                             <tr>
-                                <th className="p-3 text-left text-sm font-medium">Имя</th>
-                                <th className="p-3 text-left text-sm font-medium">Email</th>
-                                <th className="p-3 text-left text-sm font-medium">Роль</th>
-                                <th className="p-3 text-left text-sm font-medium">Группа</th>
-                                <th className="p-3 text-left text-sm font-medium">Статус</th>
-                                <th className="p-3 text-left text-sm font-medium">Действия</th>
+                                <th>Имя</th>
+                                <th>Email</th>
+                                <th>Роль</th>
+                                <th>Группа</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y">
-                            {filteredUsers.map(user => (
-                                <tr key={user.id} className="hover:bg-gray-50">
-                                    <td className="p-3 font-medium">{user.name}</td>
-                                    <td className="p-3 text-gray-500">{user.email}</td>
-                                    <td className="p-3">
-                                        <span className={`px-2 py-1 rounded text-xs ${roleLabels[user.role].color}`}>
-                                            {roleLabels[user.role].label}
-                                        </span>
-                                    </td>
-                                    <td className="p-3 text-gray-500">{user.group || '-'}</td>
-                                    <td className="p-3">
-                                        <span className={`px-2 py-1 rounded text-xs ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                            {user.status === 'active' ? 'Активен' : 'Заблокирован'}
-                                        </span>
-                                    </td>
-                                    <td className="p-3">
-                                        <button className="text-blue-600 hover:underline mr-2">Изменить</button>
-                                        <button onClick={() => deleteUser(user.id)} className="text-red-600 hover:underline">Удалить</button>
-                                    </td>
-                                </tr>
-                            ))}
+                        <tbody>
+                            {filteredUsers.map(u => {
+                                const r = ROLE_META[u.role]
+                                const statusPill = u.status === 'active' ? 'success' : 'danger'
+                                const statusLabel = u.status === 'active' ? 'Активен' : 'Заблокирован'
+                                return (
+                                    <tr key={u.id}>
+                                        <td>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                                                <div
+                                                    className="av"
+                                                    style={{ width: 28, height: 28, background: r.bg, border: `1px solid ${r.border}`, color: r.color }}
+                                                >
+                                                    {initials(u.name)}
+                                                </div>
+                                                <span style={{ fontWeight: 500, color: 'var(--p-fg1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {u.name}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td><span className="p-num t-meta">{u.email}</span></td>
+                                        <td><span className={`pill ${r.pill}`}>{r.label}</span></td>
+                                        <td><span className="t-muted">{u.group ?? '—'}</span></td>
+                                        <td><span className={`pill ${statusPill}`}>{statusLabel}</span></td>
+                                        <td>
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
+                                                <button type="button" className="p-btn p-btn-ghost p-btn-sm p-btn-icon" title="Изменить">
+                                                    <Pencil />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="p-btn p-btn-danger p-btn-sm p-btn-icon"
+                                                    onClick={() => deleteUser(u.id)}
+                                                    title="Удалить"
+                                                >
+                                                    <Trash2 />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>
 
                 {filteredUsers.length === 0 && (
-                    <div className="p-8 text-center text-gray-500">Пользователи не найдены</div>
+                    <div className="t-meta" style={{ padding: 36, textAlign: 'center' }}>Пользователи не найдены</div>
                 )}
             </div>
 
             {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                        <h3 className="text-xl font-semibold mb-4">Добавить пользователя</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm mb-1">Имя</label>
-                                <input type="text" className="w-full p-2 border rounded" />
-                            </div>
-                            <div>
-                                <label className="block text-sm mb-1">Email</label>
-                                <input type="email" className="w-full p-2 border rounded" />
-                            </div>
-                            <div>
-                                <label className="block text-sm mb-1">Роль</label>
-                                <select className="w-full p-2 border rounded">
-                                    <option value="student">Студент</option>
-                                    <option value="teacher">Преподаватель</option>
-                                    <option value="parent">Родитель</option>
-                                    <option value="admin">Админ</option>
+                <div className="modal-bg" onClick={() => setShowAddModal(false)}>
+                    <div className="modal" onClick={e => e.stopPropagation()}>
+                        <h3>Добавить пользователя</h3>
+                        <div className="p-field">
+                            <label>Имя</label>
+                            <input className="p-inp" type="text" placeholder="Полное имя" />
+                        </div>
+                        <div className="p-field">
+                            <label>Email</label>
+                            <input className="p-inp" type="email" placeholder="name@ktiacademy.kz" />
+                        </div>
+                        <div className="g2">
+                            <div className="p-field">
+                                <label>Роль</label>
+                                <select className="p-inp">
+                                    <option>Студент</option>
+                                    <option>Преподаватель</option>
+                                    <option>Родитель</option>
+                                    <option>Администратор</option>
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-sm mb-1">Группа</label>
-                                <input type="text" className="w-full p-2 border rounded" />
-                            </div>
-                            <div>
-                                <label className="block text-sm mb-1">Пароль</label>
-                                <input type="password" className="w-full p-2 border rounded" />
+                            <div className="p-field">
+                                <label>Группа</label>
+                                <input className="p-inp" type="text" placeholder="ИС-22" />
                             </div>
                         </div>
-                        <div className="flex gap-3 mt-6">
-                            <button
-                                onClick={() => setShowAddModal(false)}
-                                className="flex-1 px-4 py-2 border rounded"
-                            >
+                        <div className="p-field">
+                            <label>Пароль</label>
+                            <input className="p-inp" type="password" placeholder="••••••••" />
+                        </div>
+                        <div className="modal-foot">
+                            <button type="button" className="p-btn p-btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowAddModal(false)}>
                                 Отмена
                             </button>
-                            <button
-                                onClick={() => setShowAddModal(false)}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded"
-                            >
+                            <button type="button" className="p-btn p-btn-cyan" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowAddModal(false)}>
                                 Добавить
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-        </div>
+        </PortalShell>
     )
 }
