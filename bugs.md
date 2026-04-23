@@ -1,764 +1,348 @@
 # bugs.md
 
-## 70 open bugs (cleaned 2026-04-22: removed false positives + fixed)
+**Test-proven bugs only** — every entry below has a failing vitest test as evidence.  
+Run: `npx vitest run tests/unit/red-bugs-md.test.tsx tests/unit/red-remaining-bugs.test.ts tests/unit/bugs-125-scan.test.ts`  
+Last audit: 2026-04-22 — 37 failing tests → 28 distinct bugs.
 
 ---
 
-## Summary by Zone
+## Summary
 
-| # | Zone | Bugs | Critical |
-|---|------|------|----------|
-| 1 | Dark mode & theme | 10 | 5 |
-| 2 | Form validation | 13 | 10 |
-| 3 | TypeScript type safety | 13 | 6 |
-| 4 | Accessibility | 12 | 4 |
-| 5 | Charts & data viz | 6 | 3 |
-| 6 | Memory leaks & perf | 9 | 3 |
-| 7 | Security | 8 | 4 |
-| 8 | Auth & mock mode | 7 | 3 |
-| 9 | Database & Supabase | 7 | 4 |
-| 10 | Mock vs real mode | 6 | 2 |
-| 11 | i18n & routing | 6 | 2 |
-| 12 | Component state | 5 | 0 |
-| 13 | Race conditions | 4 | 2 |
-| 14 | Dashboard & role routing | 4 | 4 |
-| 15 | API routes | 2 | 0 |
+| Severity | Count |
+|----------|-------|
+| Critical | 5 |
+| High | 13 |
+| Medium | 10 |
+| **Total** | **28** |
 
 ---
 
-## CRITICAL (fix immediately)
+## CRITICAL
 
-### C1. API keys may be committed to git
+### C1. `.env.local` contains a real Supabase project URL
 
-**Zone:** Security | **Confidence:** 100
+**Test:** `red-remaining-bugs.test.ts` › CRITICAL #6  
+**File:** `.env.local`  
+`NEXT_PUBLIC_SUPABASE_URL` points to a real `*.supabase.co` project — confirms keys are live, not placeholders.
 
-`.env.local` contains real Supabase service role key (bypasses ALL RLS) and Gemini API key. `.gitignore` has `.env.local`, but if it was ever committed, keys are exposed.
+**Impact:** Anyone with a copy of `.env.local` has full Supabase access (service role key also present).
 
-**Files:** `.env.local`
-
-**Impact:** Anyone with repo access can read all student data, bypass RLS, make unlimited API calls.
-
-**Fix:**
-1. Revoke all exposed keys in Supabase dashboard and Google Cloud Console
-2. Remove `.env.local` from git history: `git filter-branch --force --index-filter "git rm --cached --ignore-unmatch .env.local" --prune-empty --tag-name-filter cat -- --all`
-3. Regenerate all API keys
+**Fix:** Revoke all keys in Supabase dashboard + Google Cloud, re-generate, never commit.
 
 ---
 
-### C2. No server-side route protection — all role checks are client-only
+### C2. `createGrade` call has no error handling
 
-**Zone:** Dashboard & role routing | **Confidence:** 90
+**Test:** `red-remaining-bugs.test.ts` › CRITICAL #11  
+**File:** `app/[locale]/dashboard/grades/page.tsx`  
+`createGrade(...).then(...)` has no `.catch()`. On DB failure the promise rejects silently — optimistic UI state is left dirty.
 
-All dashboard pages (`/dashboard`, `/teacher`, `/parent`, `/admin`) check roles only in client-side `useEffect`. No middleware auth, no server component checks.
-
-**Files:** All pages under `app/[locale]/{dashboard,teacher,parent,admin}/`
-
-**Impact:** Users can navigate directly to any dashboard URL. Page loads and renders JS before redirect fires. Protected content briefly visible. Can be bypassed by disabling JavaScript.
-
-**Fix:** Add middleware-based route protection or server component auth checks in `layout.tsx` for each dashboard route.
+**Fix:** Add `.catch(err => { rollback(); showError(err) })` on the same chain.
 
 ---
 
-### C5. Dark mode broken on 95% of components
+### C3. `timetable handleAddEntry` ignores DB errors
 
-**Zone:** Dark mode | **Confidence:** 100
+**Test:** `red-remaining-bugs.test.ts` › CRITICAL #12  
+**File:** `app/[locale]/dashboard/timetable/page.tsx`  
+`const { data } = await createTimetableEntry(...)` — `error` is never destructured or checked. UI appends a phantom entry even when the DB write failed.
 
-Theme infrastructure is set up correctly (ThemeProvider, CSS variables, Tailwind config), but almost all components use hardcoded light-mode colors:
-
-- `Layout.tsx` — 7 instances of `bg-white`, `bg-slate-50`, `text-slate-900`
-- `Modal.tsx` — `bg-white`, `border-slate-200`, `bg-slate-50`
-- All dashboard pages — 30+ instances of `bg-white`
-- `globals.css:31` — body has `@apply bg-slate-50 text-slate-900`
-- `globals.css:63` — `p` has hardcoded `color: #334155`
-- Charts — hardcoded `#3b82f6`, `#e5e7eb`
-- Button — `hover:bg-slate-50`, `disabled:text-slate-400`
-
-**Impact:** When dark mode is activated, content area stays white while some elements switch — broken, unusable UI.
-
-**Fix:** Global replacement needed:
-- `bg-white` → `bg-card` or `bg-background`
-- `text-slate-900` → `text-foreground`
-- `border-slate-200` → `border-border`
-- `bg-slate-50` → `bg-background`
-- Add `dark:` variants where needed
+**Fix:** `const { data, error } = await createTimetableEntry(...)` + guard on `error`.
 
 ---
 
-### C7. Dual role resolution — metadata vs profiles table
+### C4. `timetable handleDeleteEntry` updates UI before confirming success
 
-**Zone:** Auth & mock mode / Mock vs real | **Confidence:** 100
+**Test:** `red-remaining-bugs.test.ts` › CRITICAL #13  
+**File:** `app/[locale]/dashboard/timetable/page.tsx`  
+`await deleteTimetableEntry(id)` is immediately followed by `setEntries(entries.filter(...))` with no error check. A failed delete removes the row from UI but not from DB.
 
-The codebase has two competing sources of truth for user roles:
-
-1. `resolveRole()` in `lib/auth.ts:26-33` — fetches from `profiles` table, stored in `AuthContext.role`
-2. `getUserRole()` / `checkRole()` in `lib/auth.ts:114,117-118` — reads from `user.user_metadata.role`
-
-Different pages use different sources:
-- Teacher page → `useAuth().role` (from profiles table)
-- Admin page → `role` from `useAuth()` (from profiles table)
-- Parent page → `role` from `useAuth()` (fixed)
-- Student dashboard → `role` from `useAuth()` (fixed)
-
-**Impact:** After signup, `user_metadata.role` is set immediately, but `profiles` row is created async by trigger. During this gap, role sources can diverge.
-
-**Fix:** Standardize on ONE source. Either use `user_metadata.role` everywhere, or use `profiles.role` everywhere (requires waiting for `resolveRole()`).
+**Fix:** Check the return value; only call `setEntries` when `error` is null.
 
 ---
 
-### C8. Login ignores user role — sends everyone to `/`
+### C5. Materials upload is entirely fake
 
-**Zone:** Auth & mock mode | **Confidence:** 95
+**Test:** `red-remaining-bugs.test.ts` › CRITICAL #14 (2 tests)  
+**File:** `app/[locale]/dashboard/materials/page.tsx`  
+`handleUpload` and `handleDrop` call `setTimeout(() => setUploading(false), 1500)` without ever reading `e.target.files` or `e.dataTransfer.files`. No file is processed or uploaded anywhere.
 
-**File:** `app/[locale]/auth/login/page.tsx:93`
-
-After successful login: `router.push('/')`. Homepage then redirects via `getDashboardUrl()`, but this creates a double redirect and a flash of the loading spinner.
-
-**Fix:**
-```tsx
-await refreshUser()
-router.replace(getDashboardUrl() as never)
-```
+**Fix:** Read `files[0]`, build a `FormData`, POST to a real upload endpoint (or Supabase Storage).
 
 ---
 
-### C9. Race condition: `refreshUser()` + `router.push()` via setTimeout(400ms)
+## HIGH
 
-**Zone:** Auth & mock mode / Race conditions | **Confidence:** 90
+### H1. QR page is entirely in hardcoded Russian — no i18n
 
-**File:** `app/[locale]/auth/login/page.tsx:88-94`
+**Test:** `red-remaining-bugs.test.ts` › HIGH #9  
+**File:** `app/[locale]/dashboard/qr/page.tsx`  
+All strings ("Сканирование QR", etc.) are hardcoded. `useTranslations` is never imported. Kazakh locale always shows Russian.
 
-```tsx
-setTimeout(() => {
-  if (!mountedRef.current) return
-  refreshUser()
-  router.push('/')
-}, 400)
-```
-
-`refreshUser()` is async but not awaited. `router.push('/')` fires immediately after calling `refreshUser()`, before user state is updated. The 400ms delay is arbitrary — no guarantee `refreshUser()` completes in time.
-
-**Impact:** Dashboard may see `user: null` and redirect back to login, creating redirect loops on slow networks.
-
-**Fix:** Await `refreshUser()` before navigating.
+**Fix:** Add translation keys to `messages/{ru,kk}.json`, call `useTranslations()`.
 
 ---
 
-## HIGH (fix this week)
+### H2. `signup/page.tsx` uses `alert()` for success feedback
 
-### H4. Missing error handling in timetable page
+**Test:** `red-remaining-bugs.test.ts` › HIGH #15  
+**File:** `app/[locale]/auth/signup/page.tsx`  
+`alert()` blocks the main thread and is not accessible.
 
-**Zone:** Database | **Confidence:** 95
-
-**File:** `app/[locale]/dashboard/timetable/page.tsx:27-29,64-67`
-
-```tsx
-const { data } = await getTimetable(user.id)
-if (data) setEntries(data)  // error silently ignored
-
-await deleteTimetableEntry(id)
-setEntries(entries.filter(e => e.id !== id))  // updates UI even if DB delete fails
-```
-
-**Impact:** Silent data loss. Optimistic UI updates without rollback on failure.
-
-**Fix:** Check `error`, rollback state on failure, show error toast.
+**Fix:** Replace with an inline success message or toast notification.
 
 ---
 
-### H5. Missing error handling in grades page
+### H3. `signup/page.tsx` exposes raw Supabase error to users
 
-**Zone:** Database | **Confidence:** 95
+**Test:** `red-remaining-bugs.test.ts` › HIGH #16  
+**File:** `app/[locale]/auth/signup/page.tsx`  
+`setError(err.message || ...)` renders internal Supabase error strings in the UI — leaks implementation details.
 
-**File:** `app/[locale]/dashboard/grades/page.tsx:103-114`
-
-`createGrade()` called without `.catch()`. Unhandled promise rejections and silent data loss.
-
-**Fix:** Add error handling with `.then(({ data, error }) => { ... })` and `.catch()`.
+**Fix:** Use a generic message: `setError('Не удалось создать аккаунт.')`.
 
 ---
 
-### H6. Schema type mismatch: `teacher_id` nullability
+### H4. All demo accounts share the password `demo123`
 
-**Zone:** Database | **Confidence:** 90
+**Test:** `red-remaining-bugs.test.ts` › HIGH #18  
+**File:** `app/[locale]/auth/login/page.tsx`  
+Student, teacher, admin demo buttons all use `{ password: 'demo123' }`. One leak = all accounts compromised.
 
-**Files:**
-- `types/database.ts:45,55,65` — `teacher_id: string | null`
-- `SUPABASE_SCHEMA.md:194,258` — `NOT NULL` after seed
-
-TypeScript allows `null`, database rejects it at runtime.
-
-**Fix:** Update `types/database.ts` to `teacher_id: string` after post-seed DDL.
+**Fix:** Give each demo role a distinct password, or document risk prominently.
 
 ---
 
-### H9. Memory leak: setTimeout in useGrades hook
+### H5. Profile page has no authentication check
 
-**Zone:** Memory leaks | **Confidence:** 100
+**Test:** `red-remaining-bugs.test.ts` › HIGH #19  
+**File:** `app/[locale]/dashboard/profile/page.tsx`  
+`useAuth` is never imported. Any unauthenticated visitor can reach the profile page.
 
-**File:** `hooks/useGrades.ts:94-102`
-
-Pulse duration timeout (6s) not tracked or cleaned up on unmount.
-
-**Fix:** Track timeout IDs in a `Set<ReturnType<typeof setTimeout>>`, clear all on unmount.
+**Fix:** Import `useAuth`, redirect to login if `!user`.
 
 ---
 
-### H10. Memory leak: fake upload setTimeout in materials page
+### H6. Curator page has no authentication check
 
-**Zone:** Memory leaks | **Confidence:** 100
+**Test:** `red-remaining-bugs.test.ts` › HIGH #20  
+**File:** `app/[locale]/dashboard/curator/page.tsx`  
+No auth guard — anyone can submit curator messages.
 
-**File:** `app/[locale]/dashboard/materials/page.tsx:52-58`
-
-Multiple `setTimeout` calls from drag/upload events without cleanup.
-
-**Fix:** Track timeout ID in ref, clear on unmount and before creating new timeout.
+**Fix:** Same as H5.
 
 ---
 
-### H11. SignOut navigation race condition
+### H7. Consultation page has no authentication check
 
-**Zone:** Race conditions | **Confidence:** 95
+**Test:** `red-remaining-bugs.test.ts` › HIGH #21  
+**File:** `app/[locale]/dashboard/consultation/page.tsx`  
+No auth guard.
 
-**Files:**
-- `app/[locale]/teacher/page.tsx:99`
-- `app/[locale]/dashboard/page.tsx:74`
-
-`signOut().then(() => router.push(...))` — but `onAuthStateChange` fires synchronously, causing route guards to redirect before `.then()` executes. Double navigation.
-
-**Fix:** Navigate immediately, fire `signOut()` without waiting.
+**Fix:** Same as H5.
 
 ---
 
-### H14. No email/password trimming on auth forms
+### H8. Teachers page has no authentication check
 
-**Zone:** Form validation | **Confidence:** 95
+**Test:** `red-remaining-bugs.test.ts` › HIGH #22  
+**File:** `app/[locale]/dashboard/teachers/page.tsx`  
+No auth guard — "Add Teacher" is publicly accessible.
 
-**Files:**
-- `components/AuthForm.tsx:45,57`
-- `components/RegisterForm.tsx:78,90`
-- `app/[locale]/auth/login/page.tsx:84,99`
-- `app/[locale]/auth/signup/page.tsx:99,135,150`
-
-Email fields use `e.target.value` directly without `.trim()`. Trailing spaces cause auth failures.
-
-**Fix:** `setEmail(e.target.value.trim())` for email fields. Trim password on submit only.
+**Fix:** Same as H5, also verify role is `teacher` or `admin`.
 
 ---
 
-### H15. No password strength validation
+### H9. Analyze page `catch` block writes to `result` state instead of `error` state
 
-**Zone:** Form validation | **Confidence:** 85
+**Test:** `red-remaining-bugs.test.ts` › HIGH #23  
+**File:** `app/[locale]/dashboard/analyze/page.tsx`  
+`catch (err) { setResult({ average: 0, level: 'Error', ... }) }` — a failed analysis renders as if it succeeded, with level = 'Error' shown as an analysis result.
 
-**Files:**
-- `components/RegisterForm.tsx:86-95`
-- `app/[locale]/auth/signup/page.tsx:127-155`
-
-Only checks minimum length (6 chars). Allows "123456", "aaaaaa".
-
-**Fix:** Require uppercase + lowercase + number, minimum 8 chars.
+**Fix:** `catch (err) { setError(message); setResult(null) }`.
 
 ---
 
-### H16. No server-side validation in database inserts
+### H10. Dark mode: `Layout.tsx` uses bare `bg-white`
 
-**Zone:** Form validation / Database | **Confidence:** 95
+**Test:** `bugs-125-scan.test.ts` › C5  
+**File:** `components/Layout.tsx`  
+Seven or more instances of `bg-white` — all stay white when dark mode is active.
 
-**File:** `lib/database.ts` — all insert functions
-
-`createGrade`, `createTimetableEntry`, `createEvent` pass client data directly to Supabase without validation. Malicious client can send negative scores, empty subjects, oversized strings.
-
-**Fix:** Add validation in each insert function before calling Supabase.
+**Fix:** Replace with `bg-card` or `bg-background` (CSS variable-backed).
 
 ---
 
-### H17. Missing security headers
+### H11. Dark mode: `globals.css` hardcodes `color: #334155` on `p` elements
 
-**Zone:** Security | **Confidence:** 95
+**Test:** `bugs-125-scan.test.ts` › C5  
+**File:** `app/globals.css`  
+`p { color: #334155 }` overrides dark-mode text color unconditionally.
 
-**File:** `next.config.mjs`
-
-No `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Referrer-Policy`.
-
-**Fix:** Add `headers()` config to `next.config.mjs`.
+**Fix:** Use `color: var(--foreground)` or a Tailwind token.
 
 ---
 
-### H18. `session: any` in onAuthStateChange callback
+### H12. Email fields not trimmed before use (AuthForm + RegisterForm)
 
-**Zone:** TypeScript type safety | **Confidence:** 95
+**Test:** `bugs-125-scan.test.ts` › H14 (2 tests)  
+**Files:** `components/AuthForm.tsx`, `components/RegisterForm.tsx`  
+`setEmail(e.target.value)` — a trailing space causes auth failure against Supabase.
 
-**File:** `lib/auth.ts:53`
-
-`session: any` bypasses type checking for Supabase Session type.
-
-**Fix:** Import and use `Session` type from `@supabase/supabase-js`.
+**Fix:** `setEmail(e.target.value.trim())`.
 
 ---
 
-### H19. `as any` on database response in resolveRole
+### H13. RegisterForm has no password strength validation
 
-**Zone:** TypeScript type safety | **Confidence:** 90
+**Test:** `bugs-125-scan.test.ts` › H15  
+**File:** `components/RegisterForm.tsx`  
+Only minimum length (6) is checked. Passwords like `"aaaaaa"` or `"123456"` are accepted.
 
-**File:** `lib/auth.ts:29`
-
-`(data as any)?.role` — casts database response to `any` instead of using proper Profile type.
-
-**Fix:** Type `getProfile()` return properly, then just `data?.role`.
+**Fix:** Require ≥8 chars, at least one uppercase, one lowercase, one digit.
 
 ---
 
-### H20. Role resolution race condition during mount
+## MEDIUM
 
-**Zone:** Auth & mock mode | **Confidence:** 85
+### M1. Layout mobile sidebar stays open after navigation
 
-**File:** `lib/auth.ts:48-64`
+**Test:** `red-remaining-bugs.test.ts` › MEDIUM #1  
+**File:** `components/Layout.tsx`  
+`sidebarOpen` is never reset when the route changes — the sidebar remains open after clicking a link.
 
-In `AuthProvider`, `setUser(current)` fires at line 56, but `setRole(r)` only after async `resolveRole()` at line 59. Between these, components see `user` set but `role === null`.
-
-**Impact:** Teacher page's guard `if (role && role !== 'teacher')` won't redirect because role is temporarily null.
-
-**Fix:** Set user and role atomically — don't set user until role is resolved.
+**Fix:** `useEffect(() => { setSidebarOpen(false) }, [pathname])`.
 
 ---
 
-## MEDIUM (fix next sprint)
+### M2. Layout mobile menu button has no `aria-label`
 
-### M1. Hardcoded navigation paths without locale prefix
+**Test:** `red-remaining-bugs.test.ts` › MEDIUM #2  
+**File:** `components/Layout.tsx`  
+Screen readers announce the toggle as an unlabeled button.
 
-**Zone:** i18n | **Confidence:** 100
-
-Remaining instances of `router.push('/dashboard')`, `router.push('/auth/login')` without `/${locale}` prefix in files not yet migrated to `@/i18n/routing`.
-
-**Files:** AuthForm, GradesSection, TimetableSection, RegisterForm, Layout, teacher page, admin page, login page.
+**Fix:** `<button aria-label="Открыть меню" ...>`.
 
 ---
 
-### M2. Hardcoded Russian/English strings bypass i18n
+### M3. Analytics page date filter broken (Russian month abbrevs vs ISO dates)
 
-**Zone:** i18n | **Confidence:** 95
+**Test:** `red-bugs-md.test.tsx` › MEDIUM #8/#9  
+**File:** `app/[locale]/dashboard/analytics/page.tsx`  
+`g.date.startsWith(months[i].toLowerCase())` — `months = ['Янв', 'Фев', ...]` lowercased becomes `'янв'`, `'фев'`, which never matches ISO date strings like `'2026-01'`. Progress data is always empty.
 
-50+ hardcoded strings in AuthForm ("Вход", "Пароль"), RegisterForm ("Регистрация"), Layout ("Home"), dashboard pages, login page.
-
-**Fix:** All UI strings should use `useTranslations()`.
-
----
-
-### M4. Index-based keys in calendar and quick links
-
-**Zone:** Component state | **Confidence:** 90
-
-**Files:**
-- `components/ui/GradesCalendar.tsx:126` — `key={index}`
-- `components/dashboard/StudentQuickLinksSection.tsx:50` — `key={i}`
-- `components/dashboard/QuickLinksSection.tsx:25` — `key={i}`
-
-**Fix:** Use stable unique keys.
+**Fix:** Build a numeric month map `{ 'Янв': '01', 'Фев': '02', ... }` and match on `g.date.startsWith('2026-' + monthMap[month])`.
 
 ---
 
-### M5. Inline array/function creation on every render
+### M4. QR page has no "scan again" button after a successful scan
 
-**Zone:** Memory leaks & perf | **Confidence:** 85
+**Test:** `red-remaining-bugs.test.ts` › MEDIUM #10  
+**File:** `app/[locale]/dashboard/qr/page.tsx`  
+After `setResult(...)`, there is no way to reset and scan another code without navigating away and back.
 
-**Files:**
-- `app/[locale]/dashboard/page.tsx:86` — `.map()` in JSX creates new array ref every render
-- `app/[locale]/dashboard/page.tsx:70-75` — `navItems` with inline `onClick` functions
-- `app/[locale]/dashboard/analyze/page.tsx:38-58` — `getGPAData()` called on every render
-
-**Fix:** Use `useMemo` / `useCallback`.
+**Fix:** Add a button that calls `setResult('')`.
 
 ---
 
-### M6. Array mutation in analyze page
+### M5. Materials file input has no type or size validation
 
-**Zone:** Memory leaks & perf | **Confidence:** 85
+**Test:** `red-remaining-bugs.test.ts` › MEDIUM #11 (2 tests)  
+**File:** `app/[locale]/dashboard/materials/page.tsx`  
+`<input type="file" />` has no `accept=` attribute. Upload handler never checks `file.size`. Any file type and size is silently "accepted".
 
-**File:** `app/[locale]/dashboard/analyze/page.tsx:39`
-
-`grades.sort()` mutates the original array. Use `[...grades].sort()`.
-
----
-
-### M7. Missing React.memo on chart and dashboard section components
-
-**Zone:** Memory leaks & perf | **Confidence:** 85
-
-**Files:** All `components/charts/*.tsx`, all `components/dashboard/*Section.tsx`
-
-Charts are expensive to render but re-render on every parent state change.
+**Fix:** Add `accept=".pdf,.doc,.ppt,.mp4"` and validate `file.size < MAX_FILE_SIZE` before proceeding.
 
 ---
 
-### M8. AbortController dead code in hooks
+### M6. `ErrorMessage` component not wrapped in `React.memo`
 
-**Zone:** Race conditions | **Confidence:** 85
+**Test:** `red-remaining-bugs.test.ts` › MEDIUM #17  
+**File:** `components/ErrorMessage.tsx`  
+Pure presentational component re-renders on every parent update even when `message` prop is unchanged.
 
-**Files:**
-- `hooks/useTimetable.ts:37-59`
-- `hooks/useEvents.ts:34-60`
-
-`AbortController` created but never wired to actual fetch. `abortController.signal.aborted` check is useless after request completes.
+**Fix:** `export default React.memo(function ErrorMessage(...) { ... })`.
 
 ---
 
-### M9. RegisterForm setTimeout leak
+### M7. `analyze/page.tsx` mutates React state with `grades.sort()`
 
-**Zone:** Race conditions | **Confidence:** 82
+**Test:** `bugs-125-scan.test.ts` › M6 (2 tests)  
+**File:** `app/[locale]/dashboard/analyze/page.tsx`  
+`grades.sort(...)` sorts in-place — mutates the state array. React may not trigger a re-render because the reference is unchanged.
 
-**File:** `components/RegisterForm.tsx:27-30`
-
-`setTimeout(() => router.push('/dashboard'), 1500)` — no cleanup if component unmounts.
-
----
-
-### M10. Grade creation rollback uses stale closure
-
-**Zone:** Race conditions | **Confidence:** 80
-
-**File:** `app/[locale]/dashboard/grades/page.tsx:57-81`
-
-`previousGrades` captured at render time, becomes stale on double-submit.
+**Fix:** `[...grades].sort(...)` or `grades.slice().sort(...)`.
 
 ---
 
-### M11. No email format validation in registration
+### M8. `useTimetable` creates an `AbortController` that is never wired to the fetch
 
-**Zone:** Form validation | **Confidence:** 90
+**Test:** `bugs-125-scan.test.ts` › M8  
+**File:** `hooks/useTimetable.ts`  
+`abortController.signal` is never passed to `getTimetable()`. The `.abort()` in cleanup is dead code — the request cannot be cancelled.
 
-**Files:** `components/RegisterForm.tsx:75-82`, `app/[locale]/auth/signup/page.tsx:95-103`
-
-Relies only on HTML5 `type="email"` which accepts "user@localhost".
-
----
-
-### M12. No double-submit protection on modal forms
-
-**Zone:** Form validation | **Confidence:** 90
-
-**Files:** `components/AddStudentModal.tsx:30-37`, `components/ui/CreateEventModal.tsx:20-27`
-
-Users can double-click submit, creating duplicate entries.
+**Fix:** Pass `{ signal: abortController.signal }` to `getTimetable()`, or remove the controller entirely.
 
 ---
 
-### M13. Missing maxLength on text inputs
+### M9. `RegisterForm` `setTimeout` not cleaned up on unmount
 
-**Zone:** Form validation | **Confidence:** 85
+**Test:** `bugs-125-scan.test.ts` › M9  
+**File:** `components/RegisterForm.tsx`  
+`setTimeout(() => router.push('/dashboard'), 1500)` — the timer ID is not stored. If the component unmounts before it fires, it calls `setState` on a dead component.
 
-**Files:** CreateEventModal, AddStudentModal, profile page, timetable page
-
-Database has column limits, forms don't enforce them.
-
----
-
-### M14. Timetable form: no time range validation
-
-**Zone:** Form validation | **Confidence:** 90
-
-**File:** `app/[locale]/dashboard/timetable/page.tsx:38-62`
-
-End time before start time accepted.
+**Fix:** `const timerId = setTimeout(...); return () => clearTimeout(timerId)` inside a `useEffect`.
 
 ---
 
-### M15. Missing aria-labels on icon-only buttons
+### M10. `AuthForm` password visibility toggle has `tabIndex={-1}`
 
-**Zone:** Accessibility | **Confidence:** 90-95
+**Test:** `bugs-125-scan.test.ts` › M17  
+**File:** `components/AuthForm.tsx`  
+Keyboard users cannot toggle password visibility — the button is removed from tab order.
 
-**Files:**
-- `components/Layout.tsx:72-75` — mobile menu toggle
-- `components/Modal.tsx:57-61` — close button
-- `components/ui/EventCard.tsx:86-99` — like/comment buttons
-
----
-
-### M16. Clickable divs without keyboard support
-
-**Zone:** Accessibility | **Confidence:** 85
-
-**Files:**
-- `components/Notifications.tsx:71-86` — notification items
-- `components/ui/GradesCalendar.tsx:125-147` — calendar day cells
-
-`<div onClick={...}>` with `cursor-pointer` but no `role="button"`, `tabIndex`, or keyboard handler.
+**Fix:** Remove `tabIndex={-1}`, add `aria-label="Показать пароль"`.
 
 ---
 
-### M17. Password visibility toggle has tabIndex={-1}
+### M11. `catch (err: any)` in `RegisterForm` and `AuthForm`
 
-**Zone:** Accessibility | **Confidence:** 85
+**Test:** `bugs-125-scan.test.ts` › M29 (2 tests)  
+**Files:** `components/RegisterForm.tsx`, `components/AuthForm.tsx`  
+`catch (err: any)` then `err.message` — unsafe. Non-`Error` throws (strings, objects) return `undefined.message`.
 
-**File:** `components/AuthForm.tsx:62-69`
-
-Explicitly removes toggle from keyboard navigation.
-
-**Fix:** Remove `tabIndex={-1}`, add `aria-label`.
+**Fix:** `const msg = err instanceof Error ? err.message : 'Неизвестная ошибка'`.
 
 ---
 
-### M18. Missing form label associations
+### M12. `lib/database.ts` uses `.select('*')` in `getProfile`
 
-**Zone:** Accessibility | **Confidence:** 80
+**Test:** `bugs-125-scan.test.ts` › M31  
+**File:** `lib/database.ts`  
+`getProfile` fetches all columns including internal fields that the UI never uses.
 
-**Files:** RegisterForm, AddStudentModal, CreateEventModal — labels without `htmlFor` matching input `id`.
-
----
-
-### M19. Missing skip-to-content link
-
-**Zone:** Accessibility | **Confidence:** 80
-
-**File:** `app/[locale]/layout.tsx`
-
-Keyboard users must tab through all navigation to reach main content.
+**Fix:** `.select('id, role, full_name, email, avatar_url')` (or whatever columns are actually needed).
 
 ---
 
-### M20. Missing ARIA live regions for dynamic content
+### M13. `students/page.tsx` never queries Supabase — hardcoded mock data only
 
-**Zone:** Accessibility | **Confidence:** 80
+**Test:** `bugs-125-scan.test.ts` › M37 (2 tests)  
+**File:** `app/[locale]/dashboard/students/page.tsx`  
+Page uses a hardcoded `initialStudents` array. Real student data in Supabase is never fetched or displayed.
 
-Notifications list, error messages, validation errors — no `aria-live="polite"` for screen reader announcements.
-
----
-
-### M21. Dark mode contrast issues on demo buttons
-
-**Zone:** Accessibility / Dark mode | **Confidence:** 85
-
-**File:** `app/[locale]/auth/login/page.tsx:131,138,145`
-
-Demo role buttons use `bg-blue-50`, `bg-green-50` with no `dark:` variants.
+**Fix:** Import a database function (e.g. `getStudents`) and call it in a `useEffect`.
 
 ---
 
-### M22. Color-only information in grade displays
-
-**Zone:** Accessibility | **Confidence:** 85
-
-Multiple grade displays convey pass/fail through color only, without screen reader text. `GradeCard.tsx` has `sr-only` text but other grade displays don't.
-
----
-
-### M23. Non-colorblind-friendly chart palette
-
-**Zone:** Charts / Accessibility | **Confidence:** 85
-
-Colors `#3b82f6` (blue), `#10b981` (green), `#8b5cf6` (purple), `#ef4444` (red) — problematic for protanopia/deuteranopia.
-
----
-
-### M24. Missing error boundaries around chart components
-
-**Zone:** Charts | **Confidence:** 85
-
-If a chart throws from malformed data, the entire page crashes instead of graceful fallback.
-
----
-
-### M25. Recharts YAxis domain clips data outside 0-100
-
-**Zone:** Charts | **Confidence:** 85
-
-**File:** `app/[locale]/dashboard/analyze/page.tsx:131`
-
-`<YAxis domain={[0, 100]} />` clips GPA values outside range. Use dynamic domain.
-
----
-
-### M27. `as any` throughout codebase (20+ instances)
-
-**Zone:** TypeScript type safety | **Confidence:** 80-90
-
-Key locations:
-- `lib/auth.ts:53` — `session: any`
-- `lib/auth.ts:29` — `(data as any)?.role`
-- `app/[locale]/api/ai/analyze/route.ts:94` — `let body: any`
-- `hooks/useProfile.ts:37` — `data as Profile | null`
-- `hooks/useGrades.ts:47` — `(data ?? []) as Grade[]`
-- `hooks/useGrades.ts:109,116` — `'postgres_changes' as any`
-- `app/[locale]/teacher/page.tsx:48` — `(data ?? []) as Profile[]`
-- `components/RegisterForm.tsx:110` — `setRole(r.value as any)`
-
----
-
-### M28. Local Profile interface duplicates database type
-
-**Zone:** TypeScript type safety | **Confidence:** 85
-
-**File:** `hooks/useProfile.ts:5-11`
-
-Defines local `Profile` interface instead of importing from `types/database.ts`. Risk of schema drift.
-
----
-
-### M29. catch blocks use `err: any`
-
-**Zone:** TypeScript type safety | **Confidence:** 80
-
-**Files:** AuthForm, RegisterForm, login page, signup page, analyze page — all use `catch (err: any)` then `err.message`.
-
-**Fix:** `const message = err instanceof Error ? err.message : 'Unknown error'`
-
----
-
-### M30. Service role key accessible in client code
-
-**Zone:** Security | **Confidence:** 90
-
-**File:** `.env.local` — `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` prefix makes it available to all client-side code.
-
-**Fix:** Remove `NEXT_PUBLIC_` prefix. Use only in server-side scripts.
-
----
-
-### M31. Over-permissive `.select('*')` queries
-
-**Zone:** Security / Database | **Confidence:** 82
-
-**File:** `lib/database.ts:23,32,40,78,105`
-
-Multiple functions fetch ALL columns. Unnecessary data exposure.
-
-**Fix:** Select only needed columns explicitly.
-
----
-
-### M32. No CSRF protection
-
-**Zone:** Security | **Confidence:** 80
-
-No CSRF tokens on state-changing operations. Mitigated by SameSite cookies but not explicitly verified.
-
----
-
-### M33. refreshUser() has no mounted check
-
-**Zone:** Auth & mock mode | **Confidence:** 85
-
-**File:** `lib/auth.ts:41-46`
-
-Can set state on unmounted component. Convert `mounted` from `let` to `useRef`.
-
----
-
-### M34. resolveRole() silently returns null on ALL errors
-
-**Zone:** Auth & mock mode | **Confidence:** 85
-
-**File:** `lib/auth.ts:26-33`
-
-Network failures, DB errors, schema bugs — all return `null` (defaults to student). Teachers/admins lose access during connectivity issues.
-
----
-
-### M35. Missing timeout on database operations
-
-**Zone:** Database | **Confidence:** 80
-
-**File:** `lib/database.ts` — all functions
-
-When Supabase is unreachable, app hangs indefinitely.
-
----
-
-### M36. useProfile doesn't handle missing profiles
-
-**Zone:** Mock vs real | **Confidence:** 85
-
-**File:** `hooks/useProfile.ts:32-40`
-
-After signup, `profiles` row may not exist yet (trigger delay). Hook sets `profile: null` — any code accessing `profile.role` crashes.
-
----
-
-### M37. Dashboard students page is purely mock
-
-**Zone:** Mock vs real | **Confidence:** 80
-
-**File:** `app/[locale]/dashboard/students/page.tsx:17-25`
-
-Uses hardcoded `initialStudents`, never calls Supabase. Completely disconnected from real backend.
-
----
-
-### M38. Missing CORS headers and OPTIONS handler
-
-**Zone:** API routes | **Confidence:** 80
-
-**File:** `app/[locale]/api/ai/analyze/route.ts`
-
-No CORS configuration. No `OPTIONS` method handler for preflight requests.
-
----
-
-### M39. Insufficient touch target sizes on mobile
-
-**Zone:** Accessibility | **Confidence:** 80
-
-Event card buttons, calendar arrows, notification actions — may be smaller than 44x44px minimum.
-
----
-
-### M40. AddStudentModal: no error handling in handleSubmit
-
-**Zone:** Component state | **Confidence:** 85
-
-**File:** `components/AddStudentModal.tsx:30-36`
-
-If `onSubmit` throws, `setLoading(false)` never called — button stuck in loading state.
-
----
-
-### M41. AuthForm: race condition with router.push
-
-**Zone:** Component state | **Confidence:** 85
-
-**File:** `components/AuthForm.tsx:15-28`
-
-If `signIn` throws after `router.push('/dashboard')` is called, user is navigated but error state is set.
-
----
-
-## LOW (backlog)
-
-### L1. No retry logic for failed DB operations
-### L2. In-memory rate limiting resets on server restart
-### L3. Profile form saves without validation (simulated save only)
-### L4. Phone number format not validated
-### L5. Group code format not validated
-### L6. Unicode/character set not validated in name fields
-### L7. console.log with potential user data in production
-### L8. BarChart: no empty state handling
-### L9. BarChart: single data point fills entire width
-### L10. Admin dashboard uses mock data but has real auth guard (confusing UX)
-### L11. Teacher page redirects missing locale prefix despite using i18n router
-
----
-
-## Priority Fix Order
-
-### Immediate (today)
-1. C1 — Revoke exposed API keys
-
-### This week
-2. C2 — Add server-side role checks
-3. C5 — Dark mode: globals.css + Layout + Modal
-4. C7 — Standardize role source
-5. C8 + C9 — Fix login redirect to use role + await refreshUser
-6. H4–H6 — Add error handling in database operations
-7. H20 — Fix role resolution race condition
-
-### Next sprint
-8. H9–H11 — Memory leak + race condition fixes
-9. H14–H16 — Form validation improvements
-10. H17 — Security headers
-11. H18–H19 — TypeScript any in auth
-12. M1–M2 — i18n hardcoded paths and strings
-13. M15–M22 — Accessibility fixes
-
-### Backlog
-14. M5–M7 — Performance (memoization)
-15. M27–M29 — TypeScript type safety cleanup
-16. M30–M32 — Additional security hardening
-17. L1–L11 — Low priority items
+## Not yet proven by tests (do not fix until a red test is written)
+
+The following categories from the previous audit have no failing test evidence and may be false positives, already fixed, or need a test before investing time:
+
+- C2 (server-side route protection) — no test
+- C7 (dual role resolution race) — no test
+- H4/H5/H6 (timetable/grades silent error handling beyond what C3/C4 cover) — partially covered
+- M4–M11 original numbering (index keys, memoization, perf) — mixed; some covered, some not
+- M15–M22 accessibility items — only M2, M10 proven by test
+- M27–M29 full TypeScript `as any` sweep — partially covered
+- L1–L11 low priority items — none tested
