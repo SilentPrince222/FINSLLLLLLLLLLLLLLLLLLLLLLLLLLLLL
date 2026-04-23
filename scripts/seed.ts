@@ -264,11 +264,11 @@ const SCHEDULE_IT22: Omit<TimetableInsert, 'user_id'>[] = [
 ]
 
 const EVENT_TEMPLATES: Omit<EventInsert, 'user_id'>[] = [
-    { title: 'Лабораторная по Программированию', due_date: '2026-04-25', type: 'assignment', priority: 'high',   description: 'Лабораторная работа №3 — сдать преподавателю' },
-    { title: 'Контрольная по Математике',         due_date: '2026-04-29', type: 'exam',       priority: 'medium', description: 'Тема: интегральное исчисление' },
-    { title: 'Отчёт по физической лаборатории',  due_date: '2026-05-06', type: 'assignment', priority: 'medium', description: 'Письменный отчёт по лаб. №5' },
-    { title: 'Коллоквиум по Ағылшын тілі',       due_date: '2026-05-13', type: 'exam',       priority: 'low',    description: 'Устный экзамен по разделу 5' },
-    { title: 'Курсовой проект (черновик)',         due_date: '2026-05-20', type: 'assignment', priority: 'high',   description: 'Итоговый проект по специальности' },
+    { title: 'Лабораторная по Программированию', due_date: '2026-04-25', type: 'homework', priority: 'high',   description: 'Лабораторная работа №3 — сдать преподавателю' },
+    { title: 'Контрольная по Математике',         due_date: '2026-04-29', type: 'exam',    priority: 'medium', description: 'Тема: интегральное исчисление' },
+    { title: 'Отчёт по физической лаборатории',  due_date: '2026-05-06', type: 'homework', priority: 'medium', description: 'Письменный отчёт по лаб. №5' },
+    { title: 'Коллоквиум по Ағылшын тілі',       due_date: '2026-05-13', type: 'exam',    priority: 'low',    description: 'Устный экзамен по разделу 5' },
+    { title: 'Курсовой проект (черновик)',         due_date: '2026-05-20', type: 'activity', priority: 'high',   description: 'Итоговый проект по специальности' },
 ]
 
 function buildTimetable(userId: string, group: string): TimetableInsert[] {
